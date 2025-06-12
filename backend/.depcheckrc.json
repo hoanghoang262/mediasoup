@@ -1,0 +1,11 @@
+{
+  "ignores": [
+    "@commitlint/cli",
+    "@commitlint/config-conventional",
+    "prettier",
+    "pug",
+    "eslint-import-resolver-typescript",
+    "eslint-import-resolver-node"
+  ],
+  "skipMissing": true
+}

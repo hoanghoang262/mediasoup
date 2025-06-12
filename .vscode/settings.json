@@ -1,0 +1,101 @@
+{
+  // exclude files from being shown in the file explorer
+  "files.exclude": {
+    // Config files
+    // "**/.cursor": true,
+    // "**/.depcheckrc.json": true,
+    // "**/.gitignore": true,
+    // "**/.husky": true,
+    // "**/.npmrc": true,
+    // "**/.swcrc": true,
+    // "**/.syncpackrc.json": true,
+    // "**/.turbo": true,
+    // "**/commitlint.config.js": true,
+    // "**/eslint.config.mjs": true,
+
+    // Build and dependency directories
+    // "**/bin": true,
+    "**/dist": true
+    // "**/env": true,
+    // "**/node_modules": true
+    // "**/logs": true
+  },
+
+  // explorer settings
+  "explorer.compactFolders": false,
+  "explorer.confirmDelete": true,
+  "explorer.confirmDragAndDrop": true,
+
+  // Auto save settings
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 5000, // auto save delay
+
+  // ESLint config
+  "eslint.enable": true,
+  "eslint.format.enable": true,
+  "eslint.useFlatConfig": true,
+  "eslint.validate": [
+    "typescript",
+    "typescriptreact",
+    "javascript",
+    "javascriptreact"
+  ], // validate typescript and typescriptreact
+  "eslint.workingDirectories": [
+    {
+      "mode": "auto"
+    }
+  ],
+
+  // Formatting
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+
+  // TypeScript specific
+  "typescript.updateImportsOnFileMove.enabled": "always", // update imports on file move
+  "typescript.tsdk": "node_modules/typescript/lib", // typescript sdk path
+
+  // Format settings for JavaScript and TypeScript files
+  "[typescript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+
+  // Tailwind
+  "tailwindCSS.includeLanguages": {
+    "javascript": "javascript", // include javascript in tailwind
+    "javascriptreact": "javascriptreact", // include javascriptreact in tailwind
+    "typescript": "typescript", // include typescript in tailwind
+    "typescriptreact": "typescriptreact" // include typescriptreact in tailwind
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"], // class regex for cva
+    ["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"] // class regex for cn
+  ],
+
+  // Editor settings
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.quickSuggestions": {
+    "strings": true, // enable quick suggestions for strings
+    "comments": true, // enable quick suggestions for comments
+    "other": true // enable quick suggestions for other
+  },
+  "editor.suggestSelection": "first", // suggest selection
+  "editor.inlineSuggest.enabled": true, // enable inline suggestions
+  "editor.acceptSuggestionOnCommitCharacter": true, // accept suggestion on commit character like [, {, etc.
+  "editor.tabCompletion": "on", // enable tab completion
+  "yaml.maxItemsComputed": 10000 // max items computed for yaml extension by default is 1000
+}

@@ -1,0 +1,15 @@
+# Node.js
+node_modules/
+
+# pnpm
+.pnpm-debug.log
+
+# turborepo
+.turbo
+
+# build
+dist/
+
+# Logs
+logs
+*.log

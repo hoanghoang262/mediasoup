@@ -1,0 +1,12 @@
+{
+  "dependencyTypes": ["prod", "dev"],
+  "semverGroups": [
+    {
+      "label": "Enforce versions to match",
+      "range": "^",
+      "dependencyTypes": ["prod", "dev"],
+      "dependencies": ["**"],
+      "packages": ["**"]
+    }
+  ]
+}

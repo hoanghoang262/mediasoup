@@ -1,0 +1,22 @@
+body {
+  padding: 50px;
+  font:
+    14px 'Helvetica Neue',
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+a {
+  color: #00b7ff;
+}
+
+h1 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.error {
+  color: #ff0000;
+  margin: 10px 0;
+}
