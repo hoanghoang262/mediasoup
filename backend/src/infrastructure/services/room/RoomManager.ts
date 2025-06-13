@@ -9,7 +9,9 @@ import { Participant } from '../../../domain/entities/Participant';
 import { Room } from '../../../domain/entities/Room';
 import { RoomRepositoryInterface } from '../../../domain/repositories/RoomRepository';
 import { MediasoupServiceInterface } from '../../../domain/services/MediasoupServiceInterface';
-import { logger } from '../../../shared/config/logger';
+import { Logger } from '../../../shared/config/logger';
+
+const log = new Logger('room');
 
 export class RoomManager {
   private _rooms: Map<string, RoomMediaInfoInterface> = new Map();
@@ -27,7 +29,7 @@ export class RoomManager {
       // Create new domain room
       room = Room.create(roomId);
       await this._roomRepository.save(room);
-      logger.info(`Created new room: ${roomId}`);
+      log.info(`Created new room: ${roomId}`);
     }
 
     // Ensure infrastructure room exists
@@ -54,7 +56,7 @@ export class RoomManager {
       protooRoom,
     });
 
-    logger.info(`Infrastructure room created: ${roomId}`);
+    log.info(`Infrastructure room created: ${roomId}`);
   }
 
   async addParticipant(roomId: string, peerId: string): Promise<void> {
@@ -68,7 +70,7 @@ export class RoomManager {
     room.addParticipant(peerId, participant);
     await this._roomRepository.save(room);
 
-    logger.info(`Participant ${peerId} added to room ${roomId}`);
+    log.info(`Participant ${peerId} added to room ${roomId}`);
   }
 
   async removeParticipant(roomId: string, peerId: string): Promise<void> {
@@ -98,7 +100,7 @@ export class RoomManager {
       await this.closeRoom(roomId);
     }
 
-    logger.info(`Participant ${peerId} removed from room ${roomId}`);
+    log.info(`Participant ${peerId} removed from room ${roomId}`);
   }
 
   async closeRoom(roomId: string): Promise<void> {
@@ -134,7 +136,7 @@ export class RoomManager {
     // Close mediasoup router
     await this._mediasoupService.closeRouter(roomId);
 
-    logger.info(`Room ${roomId} closed`);
+    log.info(`Room ${roomId} closed`);
   }
 
   getRoomParticipants(roomId: string): string[] {

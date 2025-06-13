@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 
 import { GetAllUsersUseCase } from '../../../application/usecases/user/GetAllUsersUseCase';
 import { GetUserByIdUseCase } from '../../../application/usecases/user/GetUserByIdUseCase';
+import { Logger } from '../../../shared/config/logger';
+
+const log = new Logger('user-controller');
 
 export class UserController {
   constructor(
@@ -9,30 +12,41 @@ export class UserController {
     private readonly _getUserByIdUseCase: GetUserByIdUseCase,
   ) {}
 
-  async getAllUsers(_req: Request, res: Response): Promise<void> {
+  async getAllUsers(req: Request, res: Response): Promise<void> {
     try {
+      log.info('Getting all users', 'getAllUsers');
       const users = await this._getAllUsersUseCase.execute();
-      res.status(200).json(users);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error: unknown) {
-      res.status(500).json({ error: 'Failed to get users' });
+      res.json(users);
+    } catch (error) {
+      log.error(
+        'Failed to get all users',
+        error instanceof Error ? error : new Error(String(error)),
+        'getAllUsers',
+      );
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
   async getUserById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      log.info(`Getting user by ID: ${id}`, 'getUserById', { userId: id });
       const user = await this._getUserByIdUseCase.execute(id);
 
       if (!user) {
+        log.warn(`User not found: ${id}`, 'getUserById', { userId: id });
         res.status(404).json({ error: 'User not found' });
         return;
       }
 
-      res.status(200).json(user);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error: unknown) {
-      res.status(500).json({ error: 'Failed to get user' });
+      res.json(user);
+    } catch (error) {
+      log.error(
+        'Failed to get user by ID',
+        error instanceof Error ? error : new Error(String(error)),
+        'getUserById',
+      );
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 }

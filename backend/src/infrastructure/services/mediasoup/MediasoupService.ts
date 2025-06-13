@@ -1,56 +1,89 @@
-import { types as MediasoupTypes } from 'mediasoup';
-
-import { mediasoupWorkerManager } from './MediasoupWorkerManager';
+import { MediasoupWorkerManager } from './MediasoupWorkerManager';
 import { MediasoupServiceInterface } from '../../../domain/services/MediasoupServiceInterface';
-import { logger } from '../../../shared/config/logger';
-import { mediasoupConfig } from '../../../shared/config/mediasoup';
+import { Logger } from '../../../shared/config/logger';
+
+import type { types as mediasoupTypes } from 'mediasoup';
+
+const log = new Logger('mediasoup');
 
 export class MediasoupService implements MediasoupServiceInterface {
-  public async initialize(numWorkers = 4): Promise<void> {
-    await mediasoupWorkerManager.initialize(numWorkers);
+  private _workerManager: MediasoupWorkerManager;
+  private _routers: Map<string, mediasoupTypes.Router> = new Map();
+
+  constructor() {
+    this._workerManager = new MediasoupWorkerManager();
   }
 
-  public async createRouter(roomId: string): Promise<MediasoupTypes.Router> {
-    const workerInfo = mediasoupWorkerManager.getNextWorker();
+  async initialize(): Promise<void> {
+    await this._workerManager.initialize();
+  }
 
+  async createRouter(roomId: string): Promise<mediasoupTypes.Router> {
     try {
-      const router = await workerInfo.worker.createRouter({
-        mediaCodecs: mediasoupConfig.router.mediaCodecs,
+      log.info(`Creating MediaSoup router for room ${roomId}`, 'createRouter', {
+        roomId,
       });
 
-      workerInfo.router = router;
-      workerInfo.appData.routerId = roomId;
+      const worker = this._workerManager.getWorker();
+      const router = await worker.createRouter({
+        mediaCodecs: [
+          {
+            kind: 'audio',
+            mimeType: 'audio/opus',
+            clockRate: 48000,
+            channels: 2,
+          },
+          {
+            kind: 'video',
+            mimeType: 'video/VP8',
+            clockRate: 90000,
+          },
+          {
+            kind: 'video',
+            mimeType: 'video/H264',
+            clockRate: 90000,
+            parameters: {
+              'packetization-mode': 1,
+              'profile-level-id': '42e01f',
+            },
+          },
+        ],
+      });
 
-      logger.info(
-        `Router created for room ${roomId} on worker ${workerInfo.worker.pid}`,
-      );
-
+      this._routers.set(roomId, router);
       return router;
     } catch (error) {
-      logger.error(`Error creating router for room ${roomId}:`, error);
+      log.error(
+        `Error creating router for room ${roomId}`,
+        error instanceof Error ? error : new Error(String(error)),
+        'createRouter',
+        { roomId },
+      );
       throw error;
     }
   }
 
-  public getRouter(roomId: string): MediasoupTypes.Router | null {
-    const workerInfo = mediasoupWorkerManager.findWorkerByRoomId(roomId);
-    return workerInfo?.router || null;
+  getRouter(roomId: string): mediasoupTypes.Router | null {
+    return this._routers.get(roomId) || null;
   }
 
-  public async closeRouter(roomId: string): Promise<void> {
-    const workerInfo = mediasoupWorkerManager.findWorkerByRoomId(roomId);
-
-    if (workerInfo?.router) {
-      workerInfo.router.close();
-      workerInfo.router = null;
-      workerInfo.appData.routerId = null;
-      logger.info(`Router closed for room ${roomId}`);
+  async closeRouter(roomId: string): Promise<void> {
+    const router = this._routers.get(roomId);
+    if (router) {
+      router.close();
+      this._routers.delete(roomId);
+      log.info(`Router closed for room ${roomId}`, 'closeRouter', { roomId });
     }
   }
 
-  public async close(): Promise<void> {
-    await mediasoupWorkerManager.closeAllWorkers();
+  async close(): Promise<void> {
+    // Close all routers
+    for (const [, router] of this._routers) {
+      router.close();
+    }
+    this._routers.clear();
+
+    // Close worker manager
+    await this._workerManager.close();
   }
 }
-
-export const mediasoupService = new MediasoupService();

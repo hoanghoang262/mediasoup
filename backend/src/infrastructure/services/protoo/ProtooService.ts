@@ -3,13 +3,15 @@ import { Server } from 'http';
 import * as protoo from 'protoo-server';
 
 import { ProtooServiceInterface } from '../../../domain/services/ProtooServiceInterface';
-import { logger } from '../../../shared/config/logger';
+import { Logger } from '../../../shared/config/logger';
 import { mediasoupConfig } from '../../../shared/config/mediasoup';
 import { protooConfig } from '../../../shared/config/protoo';
 import { RoomManager } from '../room/RoomManager';
 import { InfrastructureParticipantInterface } from '../room/types';
 
 import type { types as mediasoupTypes } from 'mediasoup';
+
+const log = new Logger('ProtooService');
 
 export class ProtooService implements ProtooServiceInterface {
   private _webSocketServer: protoo.WebSocketServer | null = null;
@@ -18,7 +20,7 @@ export class ProtooService implements ProtooServiceInterface {
   constructor(private readonly _roomManager: RoomManager) {}
 
   public initialize(httpServer: Server): void {
-    logger.info('Initializing Protoo WebSocket server...');
+    log.info('Initializing Protoo WebSocket server...');
 
     this._webSocketServer = new protoo.WebSocketServer(httpServer, {
       maxReceivedFrameSize: protooConfig.maxReceivedFrameSize,
@@ -27,9 +29,7 @@ export class ProtooService implements ProtooServiceInterface {
       fragmentationThreshold: protooConfig.fragmentationThreshold,
     });
 
-    logger.info(
-      'Protoo WebSocket server created, setting up event handlers...',
-    );
+    log.info('Protoo WebSocket server created, setting up event handlers...');
 
     this._webSocketServer.on(
       'connectionrequest',
@@ -38,7 +38,7 @@ export class ProtooService implements ProtooServiceInterface {
         accept: protoo.ConnectionRequestAcceptFn,
         reject: protoo.ConnectionRequestRejectFn,
       ) => {
-        logger.info('Protoo WebSocket connectionrequest event received');
+        log.info('Protoo WebSocket connectionrequest event received');
         void this.handleConnection(info, accept, reject);
       },
     );
@@ -46,7 +46,7 @@ export class ProtooService implements ProtooServiceInterface {
     // Note: protoo WebSocketServer may not have an 'error' event
     // We'll rely on the connection-level error handling instead
 
-    logger.info('Protoo WebSocket server initialized with event handlers');
+    log.info('Protoo WebSocket server initialized with event handlers');
   }
 
   private async handleConnection(
@@ -54,10 +54,10 @@ export class ProtooService implements ProtooServiceInterface {
     accept: protoo.ConnectionRequestAcceptFn,
     reject: protoo.ConnectionRequestRejectFn,
   ): Promise<void> {
-    logger.info(`WebSocket connection request received: ${info.request.url}`);
+    log.info(`WebSocket connection request received: ${info.request.url}`);
 
     if (!info.request.url) {
-      logger.error('WebSocket connection rejected: url is required');
+      log.error('WebSocket connection rejected: url is required');
       reject(400, 'url is required');
       return;
     }
@@ -65,9 +65,7 @@ export class ProtooService implements ProtooServiceInterface {
     // Extract query string from URL (handles both full URLs and relative paths)
     const queryStart = info.request.url.indexOf('?');
     if (queryStart === -1) {
-      logger.error(
-        'WebSocket connection rejected: query parameters are required',
-      );
+      log.error('WebSocket connection rejected: query parameters are required');
       reject(400, 'query parameters are required');
       return;
     }
@@ -77,12 +75,10 @@ export class ProtooService implements ProtooServiceInterface {
     const roomId = searchParams.get('roomId');
     const peerId = searchParams.get('peerId');
 
-    logger.info(
-      `WebSocket connection params: roomId=${roomId}, peerId=${peerId}`,
-    );
+    log.info(`WebSocket connection params: roomId=${roomId}, peerId=${peerId}`);
 
     if (!roomId || !peerId) {
-      logger.error(
+      log.error(
         'WebSocket connection rejected: roomId and peerId are required',
       );
       reject(400, 'roomId and peerId are required');
@@ -90,7 +86,7 @@ export class ProtooService implements ProtooServiceInterface {
     }
 
     const transport = accept();
-    logger.info(
+    log.info(
       `WebSocket connection accepted for roomId=${roomId}, peerId=${peerId}`,
     );
 
@@ -99,13 +95,13 @@ export class ProtooService implements ProtooServiceInterface {
     const protooRoom = this._roomManager.getProtooRoom(roomId);
 
     if (!protooRoom) {
-      logger.error(`Failed to create protoo room for roomId=${roomId}`);
+      log.error(`Failed to create protoo room for roomId=${roomId}`);
       reject(500, 'Failed to create protoo room');
       return;
     }
 
     const peer = protooRoom.createPeer(peerId, transport);
-    logger.info(`Protoo peer created for roomId=${roomId}, peerId=${peerId}`);
+    log.info(`Protoo peer created for roomId=${roomId}, peerId=${peerId}`);
 
     // Create infrastructure participant
     const infrastructureParticipant: InfrastructureParticipantInterface = {
@@ -140,7 +136,9 @@ export class ProtooService implements ProtooServiceInterface {
         return;
       }
       peer.notify('ping', { timestamp: Date.now() }).catch((error: unknown) => {
-        logger.warn(`Failed to send ping to peer ${peerId}:`, error);
+        log.warn(`Failed to send ping to peer ${peerId}`, undefined, {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
     }, protooConfig.pingInterval);
     this._pingIntervals.set(pingKey, interval);
@@ -190,7 +188,7 @@ export class ProtooService implements ProtooServiceInterface {
       newPeerId,
     );
     if (!newParticipant) {
-      logger.error(
+      log.error(
         `New participant ${newPeerId} not found when notifying about existing producers`,
       );
       return;
@@ -221,13 +219,13 @@ export class ProtooService implements ProtooServiceInterface {
             producerPaused: producer.paused,
           });
 
-          logger.info(
+          log.info(
             `Notified new participant ${newPeerId} about existing producer ${producerId} from ${participantId}`,
           );
         } catch (error) {
-          logger.error(
+          log.error(
             `Failed to notify new participant ${newPeerId} about producer ${producerId}:`,
-            error,
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
@@ -262,13 +260,13 @@ export class ProtooService implements ProtooServiceInterface {
           producerPaused: producer.paused,
         });
 
-        logger.info(
+        log.info(
           `Notified participant ${participantId} about new producer ${producer.id} from ${producerPeerId}`,
         );
       } catch (error) {
-        logger.error(
+        log.error(
           `Failed to notify participant ${participantId} about new producer ${producer.id}:`,
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     }
@@ -293,7 +291,7 @@ export class ProtooService implements ProtooServiceInterface {
         participant.peer
           .notify(method, data)
           .catch((error) =>
-            logger.warn(`Failed to notify peer ${participantId}`, error),
+            log.warn(`Failed to notify peer ${participantId}`, error),
           );
       }
     }
@@ -343,9 +341,8 @@ export class ProtooService implements ProtooServiceInterface {
               displayName: `User ${pId.substring(0, 5)}`, // You can improve this
             }));
 
-          logger.info(
-            `Peer ${peerId} joined room ${roomId}, existing peers:`,
-            peers,
+          log.info(
+            `Peer ${peerId} joined room ${roomId}, existing peers: ${JSON.stringify(peers)}`,
           );
 
           // Return existing peers to the new participant
@@ -373,6 +370,8 @@ export class ProtooService implements ProtooServiceInterface {
 
           participant.transports.set(transport.id, transport);
 
+          log.info(`Transport ${transport.id} created for peer ${peerId}`);
+
           accept({
             id: transport.id,
             iceParameters: transport.iceParameters,
@@ -387,7 +386,12 @@ export class ProtooService implements ProtooServiceInterface {
             throw new Error('missing data');
           }
           const transport = participant.transports.get(String(transportId));
-          if (!transport) throw new Error('transport not found');
+          if (!transport) {
+            log.error(
+              `Transport ${transportId} not found for peer ${peerId}. Available transports: ${Array.from(participant.transports.keys()).join(', ')}`,
+            );
+            throw new Error('transport not found');
+          }
           await transport.connect({
             dtlsParameters: dtlsParameters as mediasoupTypes.DtlsParameters,
           });
@@ -401,7 +405,12 @@ export class ProtooService implements ProtooServiceInterface {
             throw new Error('missing data');
           }
           const transport = participant.transports.get(String(transportId));
-          if (!transport) throw new Error('transport not found');
+          if (!transport) {
+            log.error(
+              `Transport ${transportId} not found for peer ${peerId}. Available transports: ${Array.from(participant.transports.keys()).join(', ')}`,
+            );
+            throw new Error('transport not found');
+          }
           const producer = await transport.produce({
             kind: kind as mediasoupTypes.MediaKind,
             rtpParameters: rtpParameters as mediasoupTypes.RtpParameters,
@@ -445,7 +454,12 @@ export class ProtooService implements ProtooServiceInterface {
             throw new Error('cannot consume');
           }
           const transport = participant.transports.get(String(transportId));
-          if (!transport) throw new Error('transport not found');
+          if (!transport) {
+            log.error(
+              `Transport ${transportId} not found for peer ${peerId}. Available transports: ${Array.from(participant.transports.keys()).join(', ')}`,
+            );
+            throw new Error('transport not found');
+          }
           const consumer = await transport.consume({
             producerId: String(producerId),
             rtpCapabilities: rtpCapabilities as mediasoupTypes.RtpCapabilities,
@@ -500,7 +514,10 @@ export class ProtooService implements ProtooServiceInterface {
           reject(new Error('unknown method'));
       }
     } catch (error) {
-      logger.error('protoo request error', error);
+      log.error(
+        'protoo request error',
+        error instanceof Error ? error : new Error(String(error)),
+      );
       reject(error instanceof Error ? error : new Error('unknown error'));
     }
   }

@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "@schema": "https://json.schemastore.org/package",
   "dependencies": {
+    "@types/cls-hooked": "^4.3.9",
     "@types/cors": "^2.8.19",
+    "chalk": "^5.4.1",
+    "cls-hooked": "^4.2.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
@@ -15,6 +18,8 @@
     "protoo-server": "^4.0.6",
     "pug": "^3.0.3",
     "socket.io": "^4.8.1",
+    "tsyringe": "^4.10.0",
+    "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "zod": "^3.25.63"
   },
@@ -32,6 +37,7 @@
     "@types/node": "^22.15.31",
     "@types/protoo-server": "^4.0.6",
     "@types/supertest": "^6.0.3",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "depcheck": "^1.4.7",
     "eslint": "^9.28.0",

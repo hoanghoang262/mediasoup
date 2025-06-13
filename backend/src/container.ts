@@ -1,21 +1,21 @@
-import { InMemoryRoomRepository } from './repositories/InMemoryRoomRepository';
-import { InMemoryUserRepository } from './repositories/InMemoryUserRepository';
-import { MediasoupService } from './services/mediasoup/MediasoupService';
-import { ProtooService } from './services/protoo/ProtooService';
-import { RoomManager } from './services/room/RoomManager';
-import { RoomService } from './services/room/RoomService';
-import { CreateRoomUseCase } from '../application/usecases/room/CreateRoomUseCase';
-import { GetAllRoomsUseCase } from '../application/usecases/room/GetAllRoomsUseCase';
-import { GetOrCreateRoomUseCase } from '../application/usecases/room/GetOrCreateRoomUseCase';
-import { GetRoomByIdUseCase } from '../application/usecases/room/GetRoomByIdUseCase';
-import { JoinRoomUseCase } from '../application/usecases/room/JoinRoomUseCase';
-import { LeaveRoomUseCase } from '../application/usecases/room/LeaveRoomUseCase';
-import { GetAllUsersUseCase } from '../application/usecases/user/GetAllUsersUseCase';
-import { GetUserByIdUseCase } from '../application/usecases/user/GetUserByIdUseCase';
-import { Room } from '../domain/entities/Room';
-import { User } from '../domain/entities/User';
-import { RoomController } from '../interfaces/http/controllers/RoomController';
-import { UserController } from '../interfaces/http/controllers/UserController';
+import { CreateRoomUseCase } from './application/usecases/room/CreateRoomUseCase';
+import { GetAllRoomsUseCase } from './application/usecases/room/GetAllRoomsUseCase';
+import { GetOrCreateRoomUseCase } from './application/usecases/room/GetOrCreateRoomUseCase';
+import { GetRoomByIdUseCase } from './application/usecases/room/GetRoomByIdUseCase';
+import { JoinRoomUseCase } from './application/usecases/room/JoinRoomUseCase';
+import { LeaveRoomUseCase } from './application/usecases/room/LeaveRoomUseCase';
+import { GetAllUsersUseCase } from './application/usecases/user/GetAllUsersUseCase';
+import { GetUserByIdUseCase } from './application/usecases/user/GetUserByIdUseCase';
+import { Room } from './domain/entities/Room';
+import { User } from './domain/entities/User';
+import { InMemoryRoomRepository } from './infrastructure/repositories/InMemoryRoomRepository';
+import { InMemoryUserRepository } from './infrastructure/repositories/InMemoryUserRepository';
+import { MediasoupService } from './infrastructure/services/mediasoup/MediasoupService';
+import { ProtooService } from './infrastructure/services/protoo/ProtooService';
+import { RoomManager } from './infrastructure/services/room/RoomManager';
+import { RoomService } from './infrastructure/services/room/RoomService';
+import { RoomController } from './interfaces/http/controllers/RoomController';
+import { UserController } from './interfaces/http/controllers/UserController';
 
 // Create some sample users
 const sampleUsers = [

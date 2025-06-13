@@ -1,7 +1,9 @@
 import * as mediasoup from 'mediasoup';
 import { types as MediasoupTypes } from 'mediasoup';
 
-import { logger } from '../../../shared/config/logger';
+import { Logger } from '../../../shared/config/logger';
+
+const log = new Logger('MediasoupWorker');
 
 export interface WorkerInfoInterface {
   worker: MediasoupTypes.Worker;
@@ -19,7 +21,9 @@ export class MediasoupWorkerManager {
    * Initialize the worker manager by creating mediasoup workers
    */
   public async initialize(numWorkers = 4): Promise<void> {
-    logger.info(`Initializing ${numWorkers} MediaSoup workers`);
+    log.info(`Initializing ${numWorkers} MediaSoup workers`, 'initialize', {
+      numWorkers,
+    });
 
     for (let i = 0; i < numWorkers; i++) {
       try {
@@ -29,7 +33,11 @@ export class MediasoupWorkerManager {
         });
 
         worker.on('died', () => {
-          logger.error(`Worker ${worker.pid} died, exiting...`);
+          log.error(
+            `Worker ${worker.pid} died, exiting...`,
+            undefined,
+            'worker-died',
+          );
           setTimeout(() => process.exit(1), 2000);
         });
 
@@ -41,11 +49,17 @@ export class MediasoupWorkerManager {
           },
         });
 
-        logger.info(
+        log.info(
           `Worker ${i + 1}/${numWorkers} created with PID ${worker.pid}`,
+          'initialize',
+          { workerIndex: i + 1, totalWorkers: numWorkers, pid: worker.pid },
         );
       } catch (error) {
-        logger.error(`Error creating worker: ${error}`);
+        log.error(
+          `Error creating worker`,
+          error instanceof Error ? error : new Error(String(error)),
+          'initialize',
+        );
         throw error;
       }
     }
@@ -61,6 +75,13 @@ export class MediasoupWorkerManager {
   }
 
   /**
+   * Get a worker (for compatibility)
+   */
+  public getWorker(): MediasoupTypes.Worker {
+    return this.getNextWorker().worker;
+  }
+
+  /**
    * Find a worker by room ID
    */
   public findWorkerByRoomId(roomId: string): WorkerInfoInterface | undefined {
@@ -73,18 +94,29 @@ export class MediasoupWorkerManager {
    * Close all workers
    */
   public async closeAllWorkers(): Promise<void> {
-    logger.info('Closing all MediaSoup workers');
+    log.info('Closing all MediaSoup workers', 'closeAllWorkers');
 
     for (const workerInfo of this._workers) {
       try {
         workerInfo.worker.close();
       } catch (error) {
-        logger.error(`Error closing worker: ${error}`);
+        log.error(
+          `Error closing worker`,
+          error instanceof Error ? error : new Error(String(error)),
+          'closeAllWorkers',
+        );
       }
     }
 
     this._workers = [];
-    logger.info('All MediaSoup workers closed');
+    log.info('All MediaSoup workers closed', 'closeAllWorkers');
+  }
+
+  /**
+   * Close method for compatibility
+   */
+  public async close(): Promise<void> {
+    await this.closeAllWorkers();
   }
 }
 

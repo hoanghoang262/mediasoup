@@ -4,8 +4,11 @@
 import http from 'http';
 
 import app from '../app';
-import { container } from '../infrastructure/container';
-import { env, logger } from '../shared/config';
+import { container } from '../container';
+import { env } from '../shared/config';
+import { Logger } from '../shared/config/logger';
+
+const log = new Logger('server');
 
 /**
  * Normalize a port into a number, string, or false.
@@ -51,11 +54,11 @@ function onError(error: NodeJS.ErrnoException): void {
   // handle specific listen errors with friendly messages
   switch (error.code) {
     case 'EACCES':
-      logger.error(`${bind} requires elevated privileges`);
+      log.error(`${bind} requires elevated privileges`, undefined, 'onError');
       process.exit(1);
       break;
     case 'EADDRINUSE':
-      logger.error(`${bind} is already in use`);
+      log.error(`${bind} is already in use`, undefined, 'onError');
       process.exit(1);
       break;
     default:
@@ -69,33 +72,37 @@ function onError(error: NodeJS.ErrnoException): void {
 function onListening(): void {
   const addr = server.address();
   const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr?.port}`;
-  logger.info(`Server listening on ${bind}`);
+  log.info(`Server listening on ${bind}`, 'onListening');
 }
 
 /**
  * Handle graceful shutdown
  */
 function handleGracefulShutdown(): void {
-  logger.info('Shutting down server...');
+  log.info('Shutting down server...', 'handleGracefulShutdown');
 
   server.close(() => {
-    logger.info('Server shutdown complete');
+    log.info('Server shutdown complete', 'handleGracefulShutdown');
     // Close mediasoup using void to handle the Promise
     void container.mediasoupService
       .close()
       .then(() => {
-        logger.info('MediaSoup closed');
+        log.info('MediaSoup closed', 'handleGracefulShutdown');
         process.exit(0);
       })
       .catch((error) => {
-        logger.error('Error closing MediaSoup:', error);
+        log.error('Error closing MediaSoup:', error, 'handleGracefulShutdown');
         process.exit(1);
       });
   });
 
   // Force shutdown after 10 seconds if graceful shutdown fails
   setTimeout(() => {
-    logger.error('Forced shutdown after timeout');
+    log.error(
+      'Forced shutdown after timeout',
+      undefined,
+      'handleGracefulShutdown',
+    );
     process.exit(1);
   }, 10000);
 }
@@ -104,7 +111,7 @@ function handleGracefulShutdown(): void {
  * Handle uncaught exceptions
  */
 process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught exception:', error);
+  log.error('Uncaught exception:', error, 'uncaughtException');
   handleGracefulShutdown();
 });
 
@@ -112,7 +119,11 @@ process.on('uncaughtException', (error: Error) => {
  * Handle unhandled promise rejections
  */
 process.on('unhandledRejection', (reason: unknown) => {
-  logger.error('Unhandled rejection:', reason);
+  log.error(
+    'Unhandled rejection:',
+    new Error(String(reason)),
+    'unhandledRejection',
+  );
 });
 
 /**
@@ -128,24 +139,32 @@ async function startServer(): Promise<void> {
   try {
     // Initialize mediasoup
     await container.mediasoupService.initialize();
-    logger.info('MediaSoup initialized successfully');
+    log.info('MediaSoup initialized successfully', 'startServer');
 
     // Initialize protoo WebSocket server
     container.protooService.initialize(server);
-    logger.info('Protoo server initialized');
+    log.info('Protoo server initialized', 'startServer');
 
     // Listen on provided port, on all network interfaces.
     server.listen(port);
     server.on('error', onError);
     server.on('listening', onListening);
   } catch (error) {
-    logger.error('Failed to initialize services:', error);
+    log.error(
+      'Failed to initialize services:',
+      error instanceof Error ? error : new Error(String(error)),
+      'startServer',
+    );
     process.exit(1);
   }
 }
 
 // Start server
 void startServer().catch((error) => {
-  logger.error('Startup error:', error);
+  log.error(
+    'Startup error:',
+    error instanceof Error ? error : new Error(String(error)),
+    'startServer',
+  );
   process.exit(1);
 });
