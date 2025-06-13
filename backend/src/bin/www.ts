@@ -129,6 +129,10 @@ async function startServer(): Promise<void> {
     await container.mediasoupService.initialize();
     logger.info('MediaSoup initialized successfully');
 
+    // Initialize protoo WebSocket server
+    container.protooService.initialize(server);
+    logger.info('Protoo server initialized');
+
     // Listen on provided port, on all network interfaces.
     server.listen(port);
     server.on('error', onError);
