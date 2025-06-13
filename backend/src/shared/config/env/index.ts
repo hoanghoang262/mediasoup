@@ -6,8 +6,19 @@ import { envSchema, type EnvType } from './schema';
 
 function loadEnvFile(): void {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const envFile =
-    nodeEnv === 'production' ? '.env.production' : '.env.development';
+
+  let envFile: string;
+  switch (nodeEnv) {
+    case 'production':
+      envFile = '.env.production';
+      break;
+    case 'test':
+      envFile = '.env.test';
+      break;
+    default:
+      envFile = '.env.development';
+  }
+
   const envPath = join(process.cwd(), 'env', envFile);
 
   const result = config({ path: envPath });

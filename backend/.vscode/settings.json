@@ -12,6 +12,8 @@
     // "**/.turbo": true,
     // "**/commitlint.config.js": true,
     // "**/eslint.config.mjs": true,
+    // "**/jest.config.mjs": true,
+    // "**/.prettierrc": true,
     // Build and dependency directories
     // "**/bin": true,
     // "**/dist": true

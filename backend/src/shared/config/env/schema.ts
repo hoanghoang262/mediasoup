@@ -10,7 +10,7 @@ export const envSchema = z.object({
   PORT: z.coerce
     .number()
     .int()
-    .min(1)
+    .min(0)
     .max(65535)
     .default(3000)
     .describe('Port number to listen on'),
@@ -40,7 +40,7 @@ export const envSchema = z.object({
 
   // Logging configuration
   LOG_LEVEL: z
-    .enum(['error', 'warn', 'info', 'http', 'debug'])
+    .enum(['error', 'warn', 'info', 'http', 'debug', 'silent'])
     .default('info')
     .describe('Logging level'),
 

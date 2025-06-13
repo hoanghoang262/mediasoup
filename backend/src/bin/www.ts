@@ -4,8 +4,8 @@
 import http from 'http';
 
 import app from '../app';
-import { env, logger } from '../shared/config';
 import { container } from '../infrastructure/container';
+import { env, logger } from '../shared/config';
 
 /**
  * Normalize a port into a number, string, or false.
@@ -35,7 +35,8 @@ app.set('port', port);
 /**
  * Create HTTP server.
  */
-const server = http.createServer(void app);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+const server = http.createServer(app);
 
 /**
  * Event listener for HTTP server "error" event.

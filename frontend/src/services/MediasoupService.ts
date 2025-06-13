@@ -175,10 +175,10 @@ class MediasoupService {
       this._state.roomId = roomId;
       this._state.peerId = peerId;
 
-      // Create WebSocket connection
-      // Add timestamp to avoid caching issues with the WebSocket connection
-      const timestamp = Date.now();
-      const protooUrl = `ws://${window.location.hostname}:3000/?roomId=${roomId}&peerId=${peerId}&t=${timestamp}`;
+      // Create WebSocket connection with backend-compatible URL format
+      // Backend expects: ws://localhost:3000?roomId=abc&peerId=user123
+      const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:3000`;
+      const protooUrl = `${wsUrl}?roomId=${roomId}&peerId=${peerId}`;
       
       console.log(`Connecting to ${protooUrl}`);
       

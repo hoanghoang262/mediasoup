@@ -46,9 +46,18 @@ export class ProtooService implements ProtooServiceInterface {
       reject(400, 'url is required');
       return;
     }
-    const url = new URL(info.request.url);
-    const roomId = url.searchParams.get('roomId');
-    const peerId = url.searchParams.get('peerId');
+
+    // Extract query string from URL (handles both full URLs and relative paths)
+    const queryStart = info.request.url.indexOf('?');
+    if (queryStart === -1) {
+      reject(400, 'query parameters are required');
+      return;
+    }
+
+    const queryString = info.request.url.substring(queryStart + 1);
+    const searchParams = new URLSearchParams(queryString);
+    const roomId = searchParams.get('roomId');
+    const peerId = searchParams.get('peerId');
 
     if (!roomId || !peerId) {
       reject(400, 'roomId and peerId are required');
