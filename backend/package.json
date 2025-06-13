@@ -72,7 +72,8 @@
     "syncpack:check": "pnpx syncpack list-mismatches",
     "syncpack:fix": "pnpx syncpack fix-mismatches",
     "syncpack:format": "pnpx syncpack format",
-    "syncpack:lint": "pnpx syncpack lint"
+    "syncpack:lint": "pnpx syncpack lint",
+    "test": "NODE_PATH=./test/stubs npx tsx test/ProtooService.test.ts"
   },
   "type": "module"
 }

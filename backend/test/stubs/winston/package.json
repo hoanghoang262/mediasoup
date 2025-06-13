@@ -1,0 +1,5 @@
+{
+  "name": "winston",
+  "main": "index.js",
+  "type": "commonjs"
+}
