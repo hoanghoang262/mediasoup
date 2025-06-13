@@ -1,6 +1,7 @@
 import { InMemoryRoomRepository } from './repositories/InMemoryRoomRepository';
 import { InMemoryUserRepository } from './repositories/InMemoryUserRepository';
 import { MediasoupService } from './services/mediasoup/MediasoupService';
+import { ProtooService } from './services/protoo/ProtooService';
 import { RoomService } from './services/room/RoomService';
 import { CreateRoomUseCase } from '../application/usecases/room/CreateRoomUseCase';
 import { GetAllRoomsUseCase } from '../application/usecases/room/GetAllRoomsUseCase';
@@ -30,6 +31,7 @@ const roomRepository = new InMemoryRoomRepository(sampleRooms);
 // Create services
 const mediasoupService = new MediasoupService();
 const roomService = new RoomService(roomRepository, mediasoupService);
+const protooService = new ProtooService(roomService);
 
 // Create user use cases
 const getAllUsersUseCase = new GetAllUsersUseCase(userRepository);
@@ -62,6 +64,7 @@ export const container = {
   // Services
   mediasoupService,
   roomService,
+  protooService,
 
   // Use cases
   getAllUsersUseCase,
