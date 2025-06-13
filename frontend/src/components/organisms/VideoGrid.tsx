@@ -60,8 +60,16 @@ export function VideoGrid({
 
   // Create a map of stream IDs to stream info objects for faster lookup
   const streamMap = new Map<string, MediaStreamInfo>();
+  const streamsByPeer = new Map<string, MediaStreamInfo[]>();
+  
   remoteStreams.forEach(stream => {
     streamMap.set(stream.id, stream);
+    
+    // Group streams by peerId
+    if (!streamsByPeer.has(stream.peerId)) {
+      streamsByPeer.set(stream.peerId, []);
+    }
+    streamsByPeer.get(stream.peerId)!.push(stream);
   });
 
   // Determine if there's any screen sharing going on (local or remote)
@@ -143,14 +151,12 @@ export function VideoGrid({
       
       {/* Remote videos - show all users with or without streams */}
       {userIds.map((userId) => {
-        // Find the stream for this user if it exists
-        const userStreamInfo = remoteStreams.find(stream => stream.id === userId || stream.id.startsWith(userId));
-        const userName = remoteUserNames[userId] || `User ${userId.substring(0, 5)}`;
+        // Find streams for this user using the peerId mapping
+        const userStreams = streamsByPeer.get(userId) || [];
         
-        // Don't show screen sharing streams in the participants grid
-        if (userStreamInfo?.isScreenShare) {
-          return null;
-        }
+        // Get the video stream (non-screen share) for this user
+        const userVideoStream = userStreams.find(stream => !stream.isScreenShare);
+        const userName = remoteUserNames[userId] || `User ${userId.substring(0, 5)}`;
         
         return (
           <div 
@@ -158,7 +164,7 @@ export function VideoGrid({
             className={remoteVideoClassName}
           >
             <VideoStream
-              stream={userStreamInfo?.stream || null}
+              stream={userVideoStream?.stream || null}
               userName={userName}
               userId={userId}
             />

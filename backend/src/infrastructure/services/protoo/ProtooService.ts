@@ -327,6 +327,35 @@ export class ProtooService implements ProtooServiceInterface {
           accept({ rtpCapabilities: router.rtpCapabilities });
           break;
         }
+        case 'join': {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { displayName, device, rtpCapabilities, sctpCapabilities } =
+            request.data || {};
+
+          // Store participant capabilities (you may want to extend InfrastructureParticipantInterface)
+          // For now, just mark as joined and get existing peers
+          const existingParticipants =
+            this._roomManager.getRoomParticipants(roomId);
+          const peers = existingParticipants
+            .filter((pId) => pId !== peerId)
+            .map((pId) => ({
+              id: pId,
+              displayName: `User ${pId.substring(0, 5)}`, // You can improve this
+            }));
+
+          logger.info(
+            `Peer ${peerId} joined room ${roomId}, existing peers:`,
+            peers,
+          );
+
+          // Return existing peers to the new participant
+          accept({ peers });
+
+          // For now, skip automatic consumer creation as it should happen via newConsumer notifications
+          // TODO: Create consumers for existing producers like the demo
+
+          break;
+        }
         case 'createWebRtcTransport': {
           const router = this._roomManager.getRouter(roomId);
           if (!router) throw new Error('router not found');
