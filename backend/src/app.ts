@@ -1,4 +1,4 @@
-import { env, logger } from './infrastructure/config';
+import { env, logger } from './shared/config';
 import { container } from './infrastructure/container';
 import { createServer } from './infrastructure/http/server';
 import { createApiRouter } from './interfaces/http/routes';

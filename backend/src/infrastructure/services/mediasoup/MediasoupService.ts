@@ -1,17 +1,16 @@
+import { types as MediasoupTypes } from 'mediasoup';
+
 import { mediasoupWorkerManager } from './MediasoupWorkerManager';
-import {
-  MediasoupServiceInterface,
-  RouterInterface,
-} from '../../../domain/services/MediasoupServiceInterface';
-import { logger } from '../../config/logger';
-import { mediasoupConfig } from '../../config/mediasoup';
+import { MediasoupServiceInterface } from '../../../domain/services/MediasoupServiceInterface';
+import { logger } from '../../../shared/config/logger';
+import { mediasoupConfig } from '../../../shared/config/mediasoup';
 
 export class MediasoupService implements MediasoupServiceInterface {
   public async initialize(numWorkers = 4): Promise<void> {
     await mediasoupWorkerManager.initialize(numWorkers);
   }
 
-  public async createRouter(roomId: string): Promise<RouterInterface> {
+  public async createRouter(roomId: string): Promise<MediasoupTypes.Router> {
     const workerInfo = mediasoupWorkerManager.getNextWorker();
 
     try {
@@ -26,29 +25,16 @@ export class MediasoupService implements MediasoupServiceInterface {
         `Router created for room ${roomId} on worker ${workerInfo.worker.pid}`,
       );
 
-      return {
-        id: router.id,
-        roomId,
-        internal: router,
-      };
+      return router;
     } catch (error) {
       logger.error(`Error creating router for room ${roomId}:`, error);
       throw error;
     }
   }
 
-  public getRouter(roomId: string): RouterInterface | null {
+  public getRouter(roomId: string): MediasoupTypes.Router | null {
     const workerInfo = mediasoupWorkerManager.findWorkerByRoomId(roomId);
-
-    if (!workerInfo?.router) {
-      return null;
-    }
-
-    return {
-      id: workerInfo.router.id,
-      roomId,
-      internal: workerInfo.router,
-    };
+    return workerInfo?.router || null;
   }
 
   public async closeRouter(roomId: string): Promise<void> {

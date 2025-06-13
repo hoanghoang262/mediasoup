@@ -4,7 +4,7 @@
 import http from 'http';
 
 import app from '../app';
-import { env, logger } from '../infrastructure/config';
+import { env, logger } from '../shared/config';
 import { container } from '../infrastructure/container';
 
 /**

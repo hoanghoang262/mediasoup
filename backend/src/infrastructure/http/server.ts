@@ -14,7 +14,7 @@ import { Router } from 'express';
 import createError, { HttpError } from 'http-errors';
 import morgan from 'morgan';
 
-import { env, logger } from '../config';
+import { env, logger } from '../../shared/config';
 
 export const createServer = (apiRouter: Router): express.Application => {
   const app = express();

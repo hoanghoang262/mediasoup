@@ -1,0 +1,3 @@
+# This directory is reserved for application-specific interfaces
+# These interfaces define contracts for application services and adapters
+# Examples: NotificationService, EmailService, EventBus, etc. 

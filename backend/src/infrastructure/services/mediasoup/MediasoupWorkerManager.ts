@@ -1,7 +1,7 @@
 import * as mediasoup from 'mediasoup';
 import { types as MediasoupTypes } from 'mediasoup';
 
-import { logger } from '../../config/logger';
+import { logger } from '../../../shared/config/logger';
 
 export interface WorkerInfoInterface {
   worker: MediasoupTypes.Worker;

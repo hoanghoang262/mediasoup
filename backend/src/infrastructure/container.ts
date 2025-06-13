@@ -2,11 +2,14 @@ import { InMemoryRoomRepository } from './repositories/InMemoryRoomRepository';
 import { InMemoryUserRepository } from './repositories/InMemoryUserRepository';
 import { MediasoupService } from './services/mediasoup/MediasoupService';
 import { ProtooService } from './services/protoo/ProtooService';
+import { RoomManager } from './services/room/RoomManager';
 import { RoomService } from './services/room/RoomService';
 import { CreateRoomUseCase } from '../application/usecases/room/CreateRoomUseCase';
 import { GetAllRoomsUseCase } from '../application/usecases/room/GetAllRoomsUseCase';
 import { GetOrCreateRoomUseCase } from '../application/usecases/room/GetOrCreateRoomUseCase';
 import { GetRoomByIdUseCase } from '../application/usecases/room/GetRoomByIdUseCase';
+import { JoinRoomUseCase } from '../application/usecases/room/JoinRoomUseCase';
+import { LeaveRoomUseCase } from '../application/usecases/room/LeaveRoomUseCase';
 import { GetAllUsersUseCase } from '../application/usecases/user/GetAllUsersUseCase';
 import { GetUserByIdUseCase } from '../application/usecases/user/GetUserByIdUseCase';
 import { Room } from '../domain/entities/Room';
@@ -28,10 +31,11 @@ const sampleRooms = [Room.create('main'), Room.create('meeting')];
 const userRepository = new InMemoryUserRepository(sampleUsers);
 const roomRepository = new InMemoryRoomRepository(sampleRooms);
 
-// Create services
+// Create services - following clean architecture dependency flow
 const mediasoupService = new MediasoupService();
-const roomService = new RoomService(roomRepository, mediasoupService);
-const protooService = new ProtooService(roomService);
+const roomManager = new RoomManager(roomRepository, mediasoupService);
+const roomService = new RoomService(roomManager);
+const protooService = new ProtooService(roomManager);
 
 // Create user use cases
 const getAllUsersUseCase = new GetAllUsersUseCase(userRepository);
@@ -42,6 +46,8 @@ const getAllRoomsUseCase = new GetAllRoomsUseCase(roomRepository);
 const getRoomByIdUseCase = new GetRoomByIdUseCase(roomRepository);
 const createRoomUseCase = new CreateRoomUseCase(roomRepository);
 const getOrCreateRoomUseCase = new GetOrCreateRoomUseCase(roomRepository);
+const joinRoomUseCase = new JoinRoomUseCase(roomRepository);
+const leaveRoomUseCase = new LeaveRoomUseCase(roomRepository);
 
 // Create controllers
 const userController = new UserController(
@@ -63,6 +69,7 @@ export const container = {
 
   // Services
   mediasoupService,
+  roomManager,
   roomService,
   protooService,
 
@@ -73,6 +80,8 @@ export const container = {
   getRoomByIdUseCase,
   createRoomUseCase,
   getOrCreateRoomUseCase,
+  joinRoomUseCase,
+  leaveRoomUseCase,
 
   // Controllers
   userController,

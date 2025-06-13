@@ -1,8 +1,10 @@
+import { ParticipantInterface } from './Participant';
+
 export interface RoomInterface {
   id: string;
+  participants: Map<string, ParticipantInterface>;
   createdAt: Date;
   routerId?: string;
-  participants: Set<string>;
 }
 
 export class Room {
@@ -10,19 +12,22 @@ export class Room {
   readonly createdAt: Date;
   private _routerId?: string;
   private _participants: Set<string>;
+  private _participantMap: Map<string, ParticipantInterface>;
 
   constructor(props: RoomInterface) {
     this.id = props.id;
     this.createdAt = props.createdAt;
     this._routerId = props.routerId;
-    this._participants = props.participants;
+    this._participantMap = props.participants;
+    this._participants = new Set<string>(props.participants.keys());
   }
 
   static create(id: string): Room {
     return new Room({
       id,
       createdAt: new Date(),
-      participants: new Set<string>(),
+      participants: new Map<string, ParticipantInterface>(),
+      routerId: undefined,
     });
   }
 
@@ -38,12 +43,17 @@ export class Room {
     return Array.from(this._participants);
   }
 
-  addParticipant(participantId: string): void {
+  addParticipant(
+    participantId: string,
+    participant: ParticipantInterface,
+  ): void {
     this._participants.add(participantId);
+    this._participantMap.set(participantId, participant);
   }
 
   removeParticipant(participantId: string): void {
     this._participants.delete(participantId);
+    this._participantMap.delete(participantId);
   }
 
   hasParticipant(participantId: string): boolean {

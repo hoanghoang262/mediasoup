@@ -17,6 +17,6 @@
       "@public/*": ["public/*"]
     }
   },
-  "include": ["src/**/*", "bin/**/*", "types/**/*"],
+  "include": ["src/**/*", "bin/**/*", "types/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

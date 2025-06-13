@@ -7,10 +7,8 @@ export const createRoomRouter = (roomController: RoomController): Router => {
 
   router.get('/', (req, res) => roomController.getAllRooms(req, res));
   router.get('/:id', (req, res) => roomController.getRoomById(req, res));
+  router.post('/:id/join', (req, res) => roomController.joinRoom(req, res));
   router.post('/', (req, res) => roomController.createRoom(req, res));
-  router.get('/:id/join', (req, res) =>
-    roomController.getOrCreateRoom(req, res),
-  );
 
   return router;
 };

@@ -1,28 +1,29 @@
 import { Server } from 'http';
+
 import * as protoo from 'protoo-server';
-import type { types as mediasoupTypes } from 'mediasoup';
 
-import { mediasoupConfig } from '../../config/mediasoup';
-
-import { RoomServiceInterface } from '../../../domain/services/RoomServiceInterface';
 import { ProtooServiceInterface } from '../../../domain/services/ProtooServiceInterface';
-import { logger } from '../../config/logger';
+import { logger } from '../../../shared/config/logger';
+import { mediasoupConfig } from '../../../shared/config/mediasoup';
+import { protooConfig } from '../../../shared/config/protoo';
+import { RoomManager } from '../room/RoomManager';
+import { InfrastructureParticipantInterface } from '../room/types';
 
-export interface PeerMediaInfo {
-  peer: protoo.Peer;
-  transports: Map<string, mediasoupTypes.WebRtcTransport>;
-  producers: Map<string, mediasoupTypes.Producer>;
-  consumers: Map<string, mediasoupTypes.Consumer>;
-}
+import type { types as mediasoupTypes } from 'mediasoup';
 
 export class ProtooService implements ProtooServiceInterface {
   private _webSocketServer: protoo.WebSocketServer | null = null;
-  private readonly _peers: Map<string, Map<string, PeerMediaInfo>> = new Map();
+  private _pingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
-  constructor(private readonly _roomService: RoomServiceInterface) {}
+  constructor(private readonly _roomManager: RoomManager) {}
 
   public initialize(httpServer: Server): void {
-    this._webSocketServer = new protoo.WebSocketServer(httpServer);
+    this._webSocketServer = new protoo.WebSocketServer(httpServer, {
+      maxReceivedFrameSize: protooConfig.maxReceivedFrameSize,
+      maxReceivedMessageSize: protooConfig.maxReceivedMessageSize,
+      fragmentOutgoingMessages: protooConfig.fragmentOutgoingMessages,
+      fragmentationThreshold: protooConfig.fragmentationThreshold,
+    });
     this._webSocketServer.on(
       'connectionrequest',
       (
@@ -41,7 +42,11 @@ export class ProtooService implements ProtooServiceInterface {
     accept: protoo.ConnectionRequestAcceptFn,
     reject: protoo.ConnectionRequestRejectFn,
   ): Promise<void> {
-    const url = new URL(info.request.url || '', 'http://localhost');
+    if (!info.request.url) {
+      reject(400, 'url is required');
+      return;
+    }
+    const url = new URL(info.request.url);
     const roomId = url.searchParams.get('roomId');
     const peerId = url.searchParams.get('peerId');
 
@@ -51,41 +56,85 @@ export class ProtooService implements ProtooServiceInterface {
     }
 
     const transport = accept();
-    const peer = new protoo.Peer(transport);
 
-    let roomPeers = this._peers.get(roomId);
-    if (!roomPeers) {
-      roomPeers = new Map();
-      this._peers.set(roomId, roomPeers);
+    // Get or create room and protoo room
+    await this._roomManager.getOrCreateRoom(roomId);
+    const protooRoom = this._roomManager.getProtooRoom(roomId);
+
+    if (!protooRoom) {
+      reject(500, 'Failed to create protoo room');
+      return;
     }
 
-    const peerInfo: PeerMediaInfo = {
+    const peer = protooRoom.createPeer(peerId, transport);
+
+    // Create infrastructure participant
+    const infrastructureParticipant: InfrastructureParticipantInterface = {
+      id: peerId,
       peer,
       transports: new Map(),
       producers: new Map(),
       consumers: new Map(),
+      joinedAt: new Date(),
     };
 
-    roomPeers.set(peerId, peerInfo);
-
-    await this._roomService.addParticipant(roomId, peerId);
+    this._roomManager.setInfrastructureParticipant(
+      roomId,
+      peerId,
+      infrastructureParticipant,
+    );
+    await this._roomManager.addParticipant(roomId, peerId);
     this.broadcast(roomId, 'participantJoined', { peerId }, peerId);
 
-    peer.on('request', (request, acceptRequest, rejectRequest) => {
-      void this.handleRequest(
-        roomId,
-        peerId,
-        request,
-        acceptRequest,
-        rejectRequest,
-      );
-    });
+    // --- PING/PONG KEEPALIVE LOGIC ---
+    const pingKey = `${roomId}:${peerId}`;
+    this.cleanupPingInterval(pingKey);
+    const interval = setInterval(() => {
+      // If peer is closed, cleanup
+      if (peer.closed) {
+        this.cleanupPingInterval(pingKey);
+        return;
+      }
+      peer.notify('ping', { timestamp: Date.now() }).catch((error: unknown) => {
+        logger.warn(`Failed to send ping to peer ${peerId}:`, error);
+      });
+    }, protooConfig.pingInterval);
+    this._pingIntervals.set(pingKey, interval);
+    // --- END PING/PONG LOGIC ---
+
+    peer.on(
+      'request',
+      (
+        request: protoo.ProtooRequest,
+        acceptRequest: (data?: Record<string, unknown>) => void,
+        rejectRequest: (error?: Error) => void,
+      ) => {
+        void this.handleRequest(
+          roomId,
+          peerId,
+          request,
+          acceptRequest,
+          rejectRequest,
+        );
+      },
+    );
 
     peer.on('close', () => {
-      roomPeers?.delete(peerId);
-      void this._roomService.removeParticipant(roomId, peerId);
+      this._roomManager.removeInfrastructureParticipant(roomId, peerId);
+      void this._roomManager.removeParticipant(roomId, peerId);
       this.broadcast(roomId, 'participantLeft', { peerId }, peerId);
+      // --- CLEANUP PING INTERVAL ---
+      this.cleanupPingInterval(pingKey);
+      // --- END CLEANUP ---
     });
+  }
+
+  private cleanupPingInterval(key: string): void {
+    const interval = this._pingIntervals.get(key);
+    if (interval) {
+      clearInterval(interval);
+      this._pingIntervals.delete(key);
+    }
   }
 
   private broadcast(
@@ -94,29 +143,39 @@ export class ProtooService implements ProtooServiceInterface {
     data: Record<string, unknown>,
     excludePeerId?: string,
   ): void {
-    const roomPeers = this._peers.get(roomId);
-    if (!roomPeers) return;
+    const participants = this._roomManager.getRoomParticipants(roomId);
 
-    for (const [id, info] of roomPeers.entries()) {
-      if (id === excludePeerId) continue;
-      info.peer
-        .notify(method, data)
-        .catch((error) => logger.warn(`Failed to notify peer ${id}`, error));
+    for (const participantId of participants) {
+      if (participantId === excludePeerId) continue;
+
+      const participant = this._roomManager.getInfrastructureParticipant(
+        roomId,
+        participantId,
+      );
+      if (participant) {
+        participant.peer
+          .notify(method, data)
+          .catch((error) =>
+            logger.warn(`Failed to notify peer ${participantId}`, error),
+          );
+      }
     }
   }
 
   private async handleRequest(
     roomId: string,
     peerId: string,
-    request: protoo.Request,
+    request: protoo.ProtooRequest,
     accept: (data?: Record<string, unknown>) => void,
     reject: (error?: Error) => void,
   ): Promise<void> {
-    const roomPeers = this._peers.get(roomId);
-    const peerInfo = roomPeers?.get(peerId);
+    const participant = this._roomManager.getInfrastructureParticipant(
+      roomId,
+      peerId,
+    );
 
-    if (!peerInfo) {
-      reject(new Error('peer not found'));
+    if (!participant) {
+      reject(new Error('participant not found'));
       return;
     }
 
@@ -126,18 +185,15 @@ export class ProtooService implements ProtooServiceInterface {
           accept({ pong: true });
           break;
         case 'getRouterRtpCapabilities': {
-          await this._roomService.getOrCreateRoom(roomId);
-          const router = this._roomService.getRouter(roomId);
+          const router = this._roomManager.getRouter(roomId);
           if (!router) throw new Error('router not found');
-          const internal = router.internal as mediasoupTypes.Router;
-          accept({ rtpCapabilities: internal.rtpCapabilities });
+          accept({ rtpCapabilities: router.rtpCapabilities });
           break;
         }
         case 'createWebRtcTransport': {
-          const router = this._roomService.getRouter(roomId);
+          const router = this._roomManager.getRouter(roomId);
           if (!router) throw new Error('router not found');
-          const internal = router.internal as mediasoupTypes.Router;
-          const transport = await internal.createWebRtcTransport({
+          const transport = await router.createWebRtcTransport({
             listenIps: mediasoupConfig.webRtcTransport.listenIps,
             enableUdp: true,
             enableTcp: true,
@@ -149,7 +205,7 @@ export class ProtooService implements ProtooServiceInterface {
             appData: { peerId },
           });
 
-          peerInfo.transports.set(transport.id, transport);
+          participant.transports.set(transport.id, transport);
 
           accept({
             id: transport.id,
@@ -164,52 +220,69 @@ export class ProtooService implements ProtooServiceInterface {
           if (!transportId || !dtlsParameters) {
             throw new Error('missing data');
           }
-          const transport = peerInfo.transports.get(String(transportId));
+          const transport = participant.transports.get(String(transportId));
           if (!transport) throw new Error('transport not found');
-          await transport.connect({ dtlsParameters: dtlsParameters as mediasoupTypes.DtlsParameters });
+          await transport.connect({
+            dtlsParameters: dtlsParameters as mediasoupTypes.DtlsParameters,
+          });
           accept({ success: true });
           break;
         }
         case 'produce': {
-          const { transportId, kind, rtpParameters, appData } = request.data || {};
+          const { transportId, kind, rtpParameters, appData } =
+            request.data || {};
           if (!transportId || !kind || !rtpParameters) {
             throw new Error('missing data');
           }
-          const transport = peerInfo.transports.get(String(transportId));
+          const transport = participant.transports.get(String(transportId));
           if (!transport) throw new Error('transport not found');
           const producer = await transport.produce({
             kind: kind as mediasoupTypes.MediaKind,
             rtpParameters: rtpParameters as mediasoupTypes.RtpParameters,
             appData: appData as mediasoupTypes.AppData,
           });
-          peerInfo.producers.set(producer.id, producer);
+          participant.producers.set(producer.id, producer);
 
-          if (appData && (appData as Record<string, unknown>).mediaType === 'screen') {
-            this.broadcast(roomId, 'screenSharingStarted', { peerId, producerId: producer.id }, peerId);
+          if (
+            appData &&
+            (appData as Record<string, unknown>).mediaType === 'screen'
+          ) {
+            this.broadcast(
+              roomId,
+              'screenSharingStarted',
+              { peerId, producerId: producer.id },
+              peerId,
+            );
           }
 
           accept({ id: producer.id });
           break;
         }
         case 'consume': {
-          const { transportId, producerId, rtpCapabilities } = request.data || {};
+          const { transportId, producerId, rtpCapabilities } =
+            request.data || {};
           if (!transportId || !producerId || !rtpCapabilities) {
             throw new Error('missing data');
           }
-          const router = this._roomService.getRouter(roomId);
+          const router = this._roomManager.getRouter(roomId);
           if (!router) throw new Error('router not found');
-          const internal = router.internal as mediasoupTypes.Router;
-          if (!internal.canConsume({ producerId: String(producerId), rtpCapabilities: rtpCapabilities as mediasoupTypes.RtpCapabilities })) {
+          if (
+            !router.canConsume({
+              producerId: String(producerId),
+              rtpCapabilities:
+                rtpCapabilities as mediasoupTypes.RtpCapabilities,
+            })
+          ) {
             throw new Error('cannot consume');
           }
-          const transport = peerInfo.transports.get(String(transportId));
+          const transport = participant.transports.get(String(transportId));
           if (!transport) throw new Error('transport not found');
           const consumer = await transport.consume({
             producerId: String(producerId),
             rtpCapabilities: rtpCapabilities as mediasoupTypes.RtpCapabilities,
             paused: true,
           });
-          peerInfo.consumers.set(consumer.id, consumer);
+          participant.consumers.set(consumer.id, consumer);
           accept({
             id: consumer.id,
             producerId: String(producerId),
@@ -221,27 +294,34 @@ export class ProtooService implements ProtooServiceInterface {
         case 'resumeConsumer': {
           const { consumerId } = request.data || {};
           if (!consumerId) throw new Error('missing consumerId');
-          const consumer = peerInfo.consumers.get(String(consumerId));
+          const consumer = participant.consumers.get(String(consumerId));
           if (!consumer) throw new Error('consumer not found');
           await consumer.resume();
           accept({ success: true });
           break;
         }
         case 'getParticipants': {
-          const participants = await this._roomService.getRoomParticipants(roomId);
+          const participants = this._roomManager.getRoomParticipants(roomId);
           accept({ participants });
           break;
         }
         case 'closeProducer': {
           const { producerId } = request.data || {};
           if (!producerId) throw new Error('missing producerId');
-          const producer = peerInfo.producers.get(String(producerId));
+          const producer = participant.producers.get(String(producerId));
           if (producer) {
-            const isScreen = (producer.appData as Record<string, unknown> | undefined)?.mediaType === 'screen';
+            const isScreen =
+              (producer.appData as Record<string, unknown> | undefined)
+                ?.mediaType === 'screen';
             producer.close();
-            peerInfo.producers.delete(String(producerId));
+            participant.producers.delete(String(producerId));
             if (isScreen) {
-              this.broadcast(roomId, 'screenSharingStopped', { peerId, producerId: String(producerId) }, peerId);
+              this.broadcast(
+                roomId,
+                'screenSharingStopped',
+                { peerId, producerId: String(producerId) },
+                peerId,
+              );
             }
           }
           accept({ success: true });
