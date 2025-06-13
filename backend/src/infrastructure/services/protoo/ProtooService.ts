@@ -18,12 +18,19 @@ export class ProtooService implements ProtooServiceInterface {
   constructor(private readonly _roomManager: RoomManager) {}
 
   public initialize(httpServer: Server): void {
+    logger.info('Initializing Protoo WebSocket server...');
+
     this._webSocketServer = new protoo.WebSocketServer(httpServer, {
       maxReceivedFrameSize: protooConfig.maxReceivedFrameSize,
       maxReceivedMessageSize: protooConfig.maxReceivedMessageSize,
       fragmentOutgoingMessages: protooConfig.fragmentOutgoingMessages,
       fragmentationThreshold: protooConfig.fragmentationThreshold,
     });
+
+    logger.info(
+      'Protoo WebSocket server created, setting up event handlers...',
+    );
+
     this._webSocketServer.on(
       'connectionrequest',
       (
@@ -31,10 +38,15 @@ export class ProtooService implements ProtooServiceInterface {
         accept: protoo.ConnectionRequestAcceptFn,
         reject: protoo.ConnectionRequestRejectFn,
       ) => {
+        logger.info('Protoo WebSocket connectionrequest event received');
         void this.handleConnection(info, accept, reject);
       },
     );
-    logger.info('Protoo WebSocket server initialized');
+
+    // Note: protoo WebSocketServer may not have an 'error' event
+    // We'll rely on the connection-level error handling instead
+
+    logger.info('Protoo WebSocket server initialized with event handlers');
   }
 
   private async handleConnection(
@@ -42,7 +54,10 @@ export class ProtooService implements ProtooServiceInterface {
     accept: protoo.ConnectionRequestAcceptFn,
     reject: protoo.ConnectionRequestRejectFn,
   ): Promise<void> {
+    logger.info(`WebSocket connection request received: ${info.request.url}`);
+
     if (!info.request.url) {
+      logger.error('WebSocket connection rejected: url is required');
       reject(400, 'url is required');
       return;
     }
@@ -50,6 +65,9 @@ export class ProtooService implements ProtooServiceInterface {
     // Extract query string from URL (handles both full URLs and relative paths)
     const queryStart = info.request.url.indexOf('?');
     if (queryStart === -1) {
+      logger.error(
+        'WebSocket connection rejected: query parameters are required',
+      );
       reject(400, 'query parameters are required');
       return;
     }
@@ -59,23 +77,35 @@ export class ProtooService implements ProtooServiceInterface {
     const roomId = searchParams.get('roomId');
     const peerId = searchParams.get('peerId');
 
+    logger.info(
+      `WebSocket connection params: roomId=${roomId}, peerId=${peerId}`,
+    );
+
     if (!roomId || !peerId) {
+      logger.error(
+        'WebSocket connection rejected: roomId and peerId are required',
+      );
       reject(400, 'roomId and peerId are required');
       return;
     }
 
     const transport = accept();
+    logger.info(
+      `WebSocket connection accepted for roomId=${roomId}, peerId=${peerId}`,
+    );
 
     // Get or create room and protoo room
     await this._roomManager.getOrCreateRoom(roomId);
     const protooRoom = this._roomManager.getProtooRoom(roomId);
 
     if (!protooRoom) {
+      logger.error(`Failed to create protoo room for roomId=${roomId}`);
       reject(500, 'Failed to create protoo room');
       return;
     }
 
     const peer = protooRoom.createPeer(peerId, transport);
+    logger.info(`Protoo peer created for roomId=${roomId}, peerId=${peerId}`);
 
     // Create infrastructure participant
     const infrastructureParticipant: InfrastructureParticipantInterface = {
@@ -93,7 +123,12 @@ export class ProtooService implements ProtooServiceInterface {
       infrastructureParticipant,
     );
     await this._roomManager.addParticipant(roomId, peerId);
+
+    // Notify existing participants about the new participant
     this.broadcast(roomId, 'participantJoined', { peerId }, peerId);
+
+    // Notify the new participant about existing producers in the room
+    await this.notifyExistingProducers(roomId, peerId);
 
     // --- PING/PONG KEEPALIVE LOGIC ---
     const pingKey = `${roomId}:${peerId}`;
@@ -143,6 +178,99 @@ export class ProtooService implements ProtooServiceInterface {
     if (interval) {
       clearInterval(interval);
       this._pingIntervals.delete(key);
+    }
+  }
+
+  private async notifyExistingProducers(
+    roomId: string,
+    newPeerId: string,
+  ): Promise<void> {
+    const newParticipant = this._roomManager.getInfrastructureParticipant(
+      roomId,
+      newPeerId,
+    );
+    if (!newParticipant) {
+      logger.error(
+        `New participant ${newPeerId} not found when notifying about existing producers`,
+      );
+      return;
+    }
+
+    // Get all participants in the room except the new one
+    const allParticipants = this._roomManager.getRoomParticipants(roomId);
+
+    for (const participantId of allParticipants) {
+      if (participantId === newPeerId) continue; // Skip the new participant
+
+      const participant = this._roomManager.getInfrastructureParticipant(
+        roomId,
+        participantId,
+      );
+      if (!participant) continue;
+
+      // Notify the new participant about each existing producer
+      for (const [producerId, producer] of participant.producers) {
+        try {
+          await newParticipant.peer.notify('newConsumer', {
+            peerId: participantId,
+            producerId: producerId,
+            kind: producer.kind,
+            rtpParameters: producer.rtpParameters,
+            type: 'simple',
+            appData: producer.appData,
+            producerPaused: producer.paused,
+          });
+
+          logger.info(
+            `Notified new participant ${newPeerId} about existing producer ${producerId} from ${participantId}`,
+          );
+        } catch (error) {
+          logger.error(
+            `Failed to notify new participant ${newPeerId} about producer ${producerId}:`,
+            error,
+          );
+        }
+      }
+    }
+  }
+
+  private async notifyNewProducer(
+    roomId: string,
+    producerPeerId: string,
+    producer: mediasoupTypes.Producer,
+  ): Promise<void> {
+    // Get all participants in the room except the producer
+    const allParticipants = this._roomManager.getRoomParticipants(roomId);
+
+    for (const participantId of allParticipants) {
+      if (participantId === producerPeerId) continue; // Skip the producer
+
+      const participant = this._roomManager.getInfrastructureParticipant(
+        roomId,
+        participantId,
+      );
+      if (!participant) continue;
+
+      try {
+        await participant.peer.notify('newConsumer', {
+          peerId: producerPeerId,
+          producerId: producer.id,
+          kind: producer.kind,
+          rtpParameters: producer.rtpParameters,
+          type: 'simple',
+          appData: producer.appData,
+          producerPaused: producer.paused,
+        });
+
+        logger.info(
+          `Notified participant ${participantId} about new producer ${producer.id} from ${producerPeerId}`,
+        );
+      } catch (error) {
+        logger.error(
+          `Failed to notify participant ${participantId} about new producer ${producer.id}:`,
+          error,
+        );
+      }
     }
   }
 
@@ -251,6 +379,9 @@ export class ProtooService implements ProtooServiceInterface {
             appData: appData as mediasoupTypes.AppData,
           });
           participant.producers.set(producer.id, producer);
+
+          // Notify all other participants about the new producer
+          await this.notifyNewProducer(roomId, peerId, producer);
 
           if (
             appData &&
