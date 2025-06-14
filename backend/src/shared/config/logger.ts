@@ -66,7 +66,7 @@ const fileFormat = printf(
 );
 
 export const logger = createLogger({
-  level: env.NODE_ENV === 'development' ? 'debug' : 'info',
+  level: env.LOG_LEVEL,
   format: combine(
     errors({ stack: true }),
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),

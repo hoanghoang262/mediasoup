@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
 export const envSchema = z.object({
-  // Server configuration
+  // Runtime Environment
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development')
     .describe('Application environment'),
 
+  // Server Configuration
   PORT: z.coerce
     .number()
     .int()
@@ -15,30 +16,13 @@ export const envSchema = z.object({
     .default(3000)
     .describe('Port number to listen on'),
 
-  HOST: z
-    .string()
-    .min(1)
-    .default('localhost')
-    .describe('Host address to bind to'),
-
-  // CORS configuration
+  // CORS Configuration (sensitive - deployment specific)
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default('http://localhost:5174')
     .describe('Comma-separated list of allowed CORS origins'),
 
-  // MediaSoup configuration
-  MEDIASOUP_LISTEN_IP: z
-    .string()
-    .default('0.0.0.0')
-    .describe('IP address for MediaSoup to listen on'),
-
-  MEDIASOUP_ANNOUNCED_IP: z
-    .string()
-    .default('127.0.0.1')
-    .describe('Public IP address for WebRTC connections'),
-
-  // Logging configuration
+  // Logging Configuration
   LOG_LEVEL: z
     .enum(['error', 'warn', 'info', 'http', 'debug', 'silent'])
     .default('info')
@@ -48,6 +32,12 @@ export const envSchema = z.object({
     .enum(['json', 'pretty'])
     .default('pretty')
     .describe('Logging format'),
+
+  // MediaSoup Configuration (sensitive - public IP)
+  MEDIASOUP_ANNOUNCED_IP: z
+    .string()
+    .optional()
+    .describe('Public IP address for WebRTC connections'),
 });
 
 export type EnvType = z.infer<typeof envSchema>;

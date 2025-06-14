@@ -37,6 +37,7 @@ interface CallState {
   toggleScreenShare: () => Promise<void>;
   setUserName: (name: string) => void;
   setRoomId: (id: string) => void;
+  setRoomData: (roomId: string, userName: string) => void;
   checkServerHealth: () => Promise<boolean>;
 }
 
@@ -66,11 +67,14 @@ export const useCallStore = create<CallState>((set, get) => ({
   joinRoom: async () => {
     const { roomId, userName } = get();
     
+    console.log('🚀 CallStore joinRoom called with:', { roomId, userName });
+    
     if (!roomId || !userName) {
       console.error('Room ID and username must be provided');
       return;
     }
     
+    console.log('🔄 Starting join room process...');
     set({ isJoining: true });
     
     // First, check server health
@@ -574,6 +578,10 @@ export const useCallStore = create<CallState>((set, get) => ({
   
   setRoomId: (id: string) => {
     set({ roomId: id });
+  },
+  
+  setRoomData: (roomId: string, userName: string) => {
+    set({ roomId, userName });
   },
   
   checkServerHealth: async (): Promise<boolean> => {

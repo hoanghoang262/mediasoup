@@ -16,7 +16,7 @@
     // Build and dependency directories
     // "**/bin": true,
     "**/dist": true,
-    "**/env": true,
+    // "**/env": true,
     "**/node_modules": true,
     "**/logs": true
   },

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { VideoGrid } from '@/components/organisms';
-import { RoomLayout } from '@/components/templates';
-import { LoadingScreen, EmptyRoomState, ParticipantsList } from '@/components/molecules';
+import { VideoGrid } from '@/components/media/VideoGrid';
+import { RoomLayout } from '@/components/layout/RoomLayout';
+import { LoadingScreen, EmptyRoomState, ParticipantsList } from '@/components/ui';
 import { useCallStore } from '@/store/callStore';
 import { checkServerAndNotify } from '@/utils/serverCheck';
 import { mediasoupService } from '@/services/MediasoupService';
@@ -20,9 +20,14 @@ const MAX_LOADING_TIME = 20000; // 20 seconds
  */
 export function RoomPage() {
   const navigate = useNavigate();
+  const { roomId: urlRoomId } = useParams<{ roomId: string }>();
+  const [searchParams] = useSearchParams();
+  const urlUserName = searchParams.get('userName');
+  
   const { 
     roomId, 
     userName, 
+    setRoomData,
     joinRoom, 
     leaveRoom,
     localStream, 
@@ -69,9 +74,23 @@ export function RoomPage() {
   }, [isJoining, isConnected]);
 
   useEffect(() => {
-    // If no room ID or username, redirect to join page
-    if (!roomId || !userName) {
+    // Get roomId and userName from URL
+    if (!urlRoomId || !urlUserName) {
+      console.log('Missing roomId or userName in URL, redirecting to join page');
       navigate('/');
+      return;
+    }
+
+    // Set room data in store if not already set or different
+    if (roomId !== urlRoomId || userName !== urlUserName) {
+      console.log('Setting room data:', { roomId: urlRoomId, userName: urlUserName });
+      setRoomData(urlRoomId, urlUserName);
+    }
+  }, [urlRoomId, urlUserName, roomId, userName, setRoomData, navigate]);
+
+  useEffect(() => {
+    // Only proceed if we have room data set in store
+    if (!roomId || !userName) {
       return;
     }
 

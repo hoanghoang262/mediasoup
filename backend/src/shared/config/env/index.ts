@@ -19,6 +19,7 @@ function loadEnvFile(): void {
       envFile = '.env.development';
   }
 
+  // Load from backend/env folder
   const envPath = join(process.cwd(), 'env', envFile);
 
   const result = config({ path: envPath });
@@ -37,6 +38,7 @@ function validateEnv(): EnvType {
 
   if (!parsed.success) {
     console.error('❌ Environment validation failed');
+    console.error(parsed.error.format());
     process.exit(1);
   }
 

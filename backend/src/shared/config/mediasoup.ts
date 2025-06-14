@@ -38,8 +38,8 @@ export const mediasoupConfig = {
   webRtcTransport: {
     listenIps: [
       {
-        ip: env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-        announcedIp: env.MEDIASOUP_ANNOUNCED_IP || undefined,
+        ip: '0.0.0.0',
+        announcedIp: env.MEDIASOUP_ANNOUNCED_IP,
       },
     ],
     initialAvailableOutgoingBitrate: 1000000,

@@ -4,6 +4,7 @@ class ApiService {
 
   constructor() {
     this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    console.log('🔧 ApiService baseURL:', this.baseURL);
   }
 
   /**
@@ -11,9 +12,13 @@ class ApiService {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseURL}/health`);
+      const url = `${this.baseURL}/health`;
+      console.log('🏥 ApiService checking health at:', url);
+      const response = await fetch(url);
+      console.log('🏥 Health check response:', response.status, response.ok);
       return response.ok;
-    } catch {
+    } catch (error) {
+      console.error('❌ Health check error:', error);
       return false;
     }
   }
@@ -62,9 +67,11 @@ class ApiService {
    */
   async getRoom(roomId: string): Promise<Room | null> {
     try {
+      console.log('🔍 Checking room existence:', roomId);
       const response = await fetch(`${this.baseURL}/rooms/${roomId}`);
       
       if (response.status === 404) {
+        console.log('❌ Room not found:', roomId);
         return null;
       }
       
@@ -72,8 +79,11 @@ class ApiService {
         throw new Error('Failed to get room');
       }
 
-      return response.json();
-    } catch {
+      const room = await response.json();
+      console.log('✅ Room found:', room);
+      return room;
+    } catch (error) {
+      console.error('❌ Error checking room:', error);
       return null;
     }
   }

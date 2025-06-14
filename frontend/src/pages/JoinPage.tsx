@@ -1,5 +1,4 @@
-import { EnhancedJoinForm } from '@/components/join/EnhancedJoinForm';
-import { MediaSoupTest } from '@/components/debug/MediaSoupTest';
+import { JoinForm } from '@/components/forms/JoinForm';
 
 export function JoinPage() {
   return (
@@ -61,8 +60,7 @@ export function JoinPage() {
           </div>
           
           <div className="w-full max-w-lg space-y-6">
-            <MediaSoupTest />
-            <EnhancedJoinForm />
+            <JoinForm />
           </div>
         </div>
       </main>
