@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 
 import type { 
   MediasoupTransportResponse, 
-  MediasoupRouterCapabilitiesResponse,
   MediasoupProduceResponse
 } from '@/types/mediasoup';
 
@@ -32,6 +31,11 @@ export interface MediaStreamInfo {
    * Whether this is a screen sharing stream
    */
   isScreenShare: boolean;
+
+  /**
+   * The peer ID who owns this stream
+   */
+  peerId: string;
 }
 
 export interface ConnectionState {
@@ -150,6 +154,8 @@ class MediasoupService {
   }
 
   public async connect(roomId: string, peerId: string): Promise<void> {
+    console.log('🚀 MediaSoup connect called with:', { roomId, peerId });
+    
     try {
       // If we're already connected with the same roomId and peerId, don't reconnect
       if (this._state.connected && this._state.roomId === roomId && this._state.peerId === peerId) {
@@ -157,6 +163,7 @@ class MediasoupService {
         return;
       }
 
+      console.log('🔄 Starting MediaSoup connection...');
       this._updateConnectionStatus('connecting');
       
       // Reset reconnection attempts on fresh connect
@@ -175,10 +182,10 @@ class MediasoupService {
       this._state.roomId = roomId;
       this._state.peerId = peerId;
 
-      // Create WebSocket connection
-      // Add timestamp to avoid caching issues with the WebSocket connection
-      const timestamp = Date.now();
-      const protooUrl = `ws://${window.location.hostname}:3000/?roomId=${roomId}&peerId=${peerId}&t=${timestamp}`;
+      // Create WebSocket connection with backend-compatible URL format
+      // Backend expects: ws://localhost:3000?roomId=abc&peerId=user123
+      const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:3000`;
+      const protooUrl = `${wsUrl}?roomId=${roomId}&peerId=${peerId}`;
       
       console.log(`Connecting to ${protooUrl}`);
       
@@ -530,11 +537,6 @@ class MediasoupService {
         this._emitEvent('localStream', stream);
         this._emitEvent('mediaAccessStatus', { hasAudio: true, hasVideo: true });
 
-        // If we're already connected, publish the stream
-        if (this._state.connected && this._state.sendTransport) {
-          await this._publishStream(stream);
-        }
-
         return stream;
       } catch (videoError) {
         console.warn('Failed to get video stream, trying audio only:', videoError);
@@ -551,11 +553,6 @@ class MediasoupService {
         // Emit a special event for camera access failure instead of showing a toast directly
         this._emitEvent('mediaAccessStatus', { hasAudio: true, hasVideo: false, error: 'camera' });
 
-        // If we're already connected, publish the stream
-        if (this._state.connected && this._state.sendTransport) {
-          await this._publishStream(audioOnlyStream);
-        }
-
         return audioOnlyStream;
       }
     } catch (error) {
@@ -570,67 +567,87 @@ class MediasoupService {
   }
 
   private async _joinRoom(): Promise<void> {
-    try {
-      if (!this._state.peer) {
-        throw new Error('Peer connection not established');
-      }
+    if (!this._state.peer) {
+      throw new Error('Peer not connected');
+    }
 
-      // Get router RTP capabilities
+    try {
+      console.log('🔄 Starting MediaSoup room join sequence...');
+
+      // Get router RTP capabilities first
+      console.log('📡 Requesting router RTP capabilities...');
       const response = await this._state.peer.request('getRouterRtpCapabilities');
-      const { rtpCapabilities } = response as unknown as MediasoupRouterCapabilitiesResponse;
+      const { rtpCapabilities } = response as { rtpCapabilities: mediasoupClient.types.RtpCapabilities };
+      console.log('✅ Router RTP capabilities received');
 
       // Create device (client endpoint for mediasoup)
+      console.log('📱 Creating MediaSoup device...');
       this._state.device = new Device();
 
       // Load device with router capabilities
+      console.log('⚙️ Loading device with router capabilities...');
       await this._state.device.load({
         routerRtpCapabilities: rtpCapabilities,
       });
+      console.log('✅ Device loaded successfully');
 
-      // No need to send 'join' request - the backend already adds participants when WebSocket connects
-      console.log('Connected to room successfully');
+      // Send join request with proper parameters
+      console.log('👥 Sending join request...');
+      const joinResponse = await this._state.peer.request('join', {
+        displayName: this._state.peerId,
+        device: {
+          name: 'Browser',
+          version: navigator.userAgent,
+        },
+        rtpCapabilities: this._state.device.rtpCapabilities,
+        sctpCapabilities: this._state.device.sctpCapabilities,
+      });
 
-      // IMPORTANT: Create the receive transport first to ensure it's ready when newConsumer notifications arrive
+      console.log('✅ Join response received:', joinResponse);
+
+      // Handle existing peers from join response
+      if (joinResponse && typeof joinResponse === 'object' && 'peers' in joinResponse) {
+        const peers = joinResponse.peers as Array<{id: string; displayName: string}>;
+        console.log('👥 Existing peers in room:', peers);
+        
+        // Add existing peers to our state
+        peers.forEach(peer => {
+          this._state.remotePeers.add(peer.id);
+          this._emitEvent('participantJoined', peer.id, { name: peer.displayName });
+        });
+      }
+
+      // Create transports
+      console.log('📥 Creating receive transport...');
       await this._createRecvTransport();
+      console.log('✅ Receive transport created');
 
-      // Then create the send transport and publish local media
+      console.log('📤 Creating send transport...');
       await this._createSendTransport();
+      console.log('✅ Send transport created');
 
-      // Now we're ready to get our media
+      // Get local media stream
+      console.log('🎥 Getting local media stream...');
       const stream = await this.getLocalStream();
+      this._state.localStream = stream;
+      this._emitEvent('localStream', stream);
 
-      // Publish our stream to the room
+      // Publish the stream
+      console.log('📡 Publishing stream to room...');
       await this._publishStream(stream);
+      console.log('✅ Stream published successfully');
 
       // Update connection status
       this._state.connected = true;
       this._updateConnectionStatus('connected');
+      console.log('✅ MediaSoup connection fully established');
 
       // Process any notifications that were queued while we were initializing
       this._processQueuedNotifications();
-
-      // Request a list of existing participants from the server
-      try {
-        const participantsResponse = await this._state.peer.request('getParticipants');
-        const { participants } = participantsResponse as unknown as { participants: string[] };
-        
-        console.log('Received current participants list:', participants);
-        
-        // Add each participant to our set and emit events
-        participants.forEach(participantId => {
-          if (participantId !== this._state.peerId) {
-            this._state.remotePeers.add(participantId);
-            // Emit participant joined event for each existing participant
-            this._emitEvent('participantJoined', participantId);
-          }
-        });
-      } catch (error) {
-        console.error('Failed to get participants list:', error);
-      }
-    } catch (error) {
-      console.error('Join room error:', error);
-      this._emitEvent('error', error);
       
+    } catch (error) {
+      console.error('❌ Failed to join room:', error);
+      this._emitEvent('error', error);
       this._updateConnectionStatus('failed');
       throw error;
     }
@@ -643,37 +660,22 @@ class MediasoupService {
       }
 
       // Request server to create a WebRTC transport
+      console.log('📤 Requesting send transport from server...');
       const transportResponse = await this._state.peer.request('createWebRtcTransport', {
         producing: true,
         consuming: false,
       });
+      console.log('✅ Send transport response received:', transportResponse);
       
       const { id, iceParameters, iceCandidates, dtlsParameters } = 
         transportResponse as unknown as MediasoupTransportResponse;
 
-      // Use fewer, more reliable STUN/TURN servers to avoid Firefox warnings
-      // Firefox warns when using 5+ servers as it slows down discovery
+      // Use simpler, more reliable ICE configuration like the demo
       const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Add free TURN servers from Google
-        {
-          urls: 'turn:relay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:relay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:relay.metered.ca:443?transport=tcp',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
+        { urls: 'stun:stun.l.google.com:19302' }
       ];
 
-      console.log('Creating send transport with ICE servers:', iceServers);
+      console.log('Creating send transport with simplified ICE servers:', iceServers);
 
       // Create the local send transport
       this._state.sendTransport = this._state.device.createSendTransport({
@@ -681,13 +683,7 @@ class MediasoupService {
         iceParameters,
         iceCandidates,
         dtlsParameters,
-        iceServers,
-        // Try all connection methods
-        iceTransportPolicy: 'all',
-        additionalSettings: {
-          iceCheckingTimeout: 15000, // Increase timeout to 15 seconds
-          iceTrickle: true
-        }
+        iceServers
       });
 
       // Set up transport event handlers
@@ -820,37 +816,22 @@ class MediasoupService {
       console.log('Creating receive transport...');
       
       // Request server to create a WebRTC transport
+      console.log('📥 Requesting receive transport from server...');
       const transportResponse = await this._state.peer.request('createWebRtcTransport', {
         producing: false,
         consuming: true,
       });
+      console.log('✅ Receive transport response received:', transportResponse);
       
       const { id, iceParameters, iceCandidates, dtlsParameters } = 
         transportResponse as unknown as MediasoupTransportResponse;
 
-      // Use fewer, more reliable STUN/TURN servers to avoid Firefox warnings
-      // Firefox warns when using 5+ servers as it slows down discovery
+      // Use simpler, more reliable ICE configuration like the demo
       const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Add free TURN servers from Google
-        {
-          urls: 'turn:relay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:relay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:relay.metered.ca:443?transport=tcp',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
+        { urls: 'stun:stun.l.google.com:19302' }
       ];
 
-      console.log('Creating receive transport with ICE servers:', iceServers);
+      console.log('Creating receive transport with simplified ICE servers:', iceServers);
 
       // Create the local receive transport
       this._state.recvTransport = this._state.device.createRecvTransport({
@@ -858,13 +839,7 @@ class MediasoupService {
         iceParameters,
         iceCandidates,
         dtlsParameters,
-        iceServers,
-        // Use more lenient ICE settings
-        iceTransportPolicy: 'all',
-        additionalSettings: {
-          encodedInsertableStreams: false, // Don't use insertable streams
-          iceCheckingTimeout: 15000, // Longer timeout for ICE connectivity checks
-        },
+        iceServers
       });
 
       // Set up transport event handlers
@@ -962,32 +937,70 @@ class MediasoupService {
         throw new Error('Send transport not created');
       }
 
+      console.log('📤 Publishing stream:', {
+        audioTracks: stream.getAudioTracks().length,
+        videoTracks: stream.getVideoTracks().length
+      });
+
+      // Check if we already have producers for these tracks to avoid duplicates
+      const existingProducers = Array.from(this._state.producers.values());
+      
       // Publish audio track
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        const audioProducer = await this._state.sendTransport.produce({
-          track: audioTrack,
-          codecOptions: {
-            opusStereo: true,
-            opusDtx: true,
-          },
-        });
-        this._state.producers.set('audio', audioProducer);
+        // Check if we already have a producer for this audio track
+        const existingAudioProducer = existingProducers.find(p => 
+          p.track?.id === audioTrack.id && p.kind === 'audio'
+        );
+        
+        if (existingAudioProducer) {
+          console.log('🔄 Audio track already published, skipping:', audioTrack.id);
+        } else {
+          console.log('🎤 Publishing audio track:', { id: audioTrack.id, enabled: audioTrack.enabled });
+          const audioProducer = await this._state.sendTransport.produce({
+            track: audioTrack,
+            codecOptions: {
+              opusStereo: true,
+              opusDtx: true,
+            },
+          });
+          this._state.producers.set(audioProducer.id, audioProducer);
+          console.log('✅ Audio producer created:', audioProducer.id);
+        }
       }
 
-      // Publish video track
+      // Publish video track  
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        const videoProducer = await this._state.sendTransport.produce({
-          track: videoTrack,
-          codecOptions: {
-            videoGoogleStartBitrate: 1000,
-          },
-        });
-        this._state.producers.set('video', videoProducer);
+        // Check if we already have a producer for this video track
+        const existingVideoProducer = existingProducers.find(p => 
+          p.track?.id === videoTrack.id && p.kind === 'video'
+        );
+        
+        if (existingVideoProducer) {
+          console.log('🔄 Video track already published, skipping:', videoTrack.id);
+        } else {
+          console.log('📹 Publishing video track:', { 
+            id: videoTrack.id, 
+            enabled: videoTrack.enabled,
+            readyState: videoTrack.readyState 
+          });
+          const videoProducer = await this._state.sendTransport.produce({
+            track: videoTrack,
+            codecOptions: {
+              videoGoogleStartBitrate: 1000,
+            },
+          });
+          this._state.producers.set(videoProducer.id, videoProducer);
+          console.log('✅ Video producer created:', videoProducer.id);
+        }
+      } else {
+        console.warn('⚠️ No video track found in stream');
       }
+
+      console.log('📡 Stream publishing completed. Producers:', this._state.producers.size);
     } catch (error) {
-      console.error('Publish stream error:', error);
+      console.error('❌ Publish stream error:', error);
       this._emitEvent('error', error);
     }
   }
@@ -1071,19 +1084,19 @@ class MediasoupService {
           return;
         }
 
-        const consumerId = data.consumerId as string;
         const producerId = data.producerId as string;
         const kind = data.kind as mediasoupClient.types.MediaKind;
-        const rtpParameters = data.rtpParameters as mediasoupClient.types.RtpParameters;
         const appData = data.appData as Record<string, unknown>;
         const remotePeerId = data.peerId as string;
 
         console.log('Processing newConsumer notification:', { 
-          consumerId, 
           producerId, 
           kind, 
           appData,
-          remotePeerId
+          remotePeerId,
+          appDataType: typeof appData,
+          appDataKeys: appData ? Object.keys(appData) : [],
+          mediaType: appData ? (appData as Record<string, unknown>).mediaType : undefined
         });
 
         // Ensure the remote peer is in our list of participants
@@ -1095,21 +1108,39 @@ class MediasoupService {
           }
         }
 
-        // Create consumer with retry mechanism
+        // Request to consume the producer with retry mechanism
         let retryCount = 0;
         const maxRetries = 3;
         
         const tryCreateConsumer = async (): Promise<void> => {
           try {
-            if (!this._state.recvTransport || !this._state.peer) {
-              throw new Error('Receive transport or Peer not available');
+            if (!this._state.recvTransport || !this._state.peer || !this._state.device) {
+              throw new Error('Receive transport, Peer, or Device not available');
             }
             
+            // Request the server to create a consumer for this producer
+            console.log(`Requesting to consume producer ${producerId} from peer ${remotePeerId}`);
+            const response = await this._state.peer.request('consume', {
+              transportId: this._state.recvTransport.id,
+              producerId,
+              rtpCapabilities: this._state.device.rtpCapabilities,
+            });
+
+            const consumerId = String(response.id);
+            const consumerRtpParameters = response.rtpParameters as mediasoupClient.types.RtpParameters;
+
+            console.log('Consumer creation response received:', {
+              consumerId,
+              producerId,
+              kind: response.kind
+            });
+
+            // Create the consumer on the client side
             const consumer = await this._state.recvTransport.consume({
               id: consumerId,
               producerId,
               kind,
-              rtpParameters,
+              rtpParameters: consumerRtpParameters,
               appData,
             });
 
@@ -1131,8 +1162,20 @@ class MediasoupService {
               track: consumer.track,
               stream,
               isScreenShare: appData.mediaType === 'screen',
+              peerId: remotePeerId,
             };
             this._state.remoteStreams.set(producerId, streamInfo);
+            
+            console.log('🔍 Debug remote stream creation:', {
+              producerId,
+              appData,
+              mediaType: appData.mediaType,
+              isScreenShareCheck: appData.mediaType === 'screen',
+              isScreenShareResult: streamInfo.isScreenShare,
+              trackKind: streamInfo.track.kind,
+              trackId: streamInfo.track.id,
+              peerId: remotePeerId
+            });
             
             console.log('Remote stream added:', {
               id: producerId,
@@ -1142,9 +1185,17 @@ class MediasoupService {
             });
             
             // Emit event with the new stream
+            console.log('🎬 Emitting remoteStreamAdded event:', {
+              id: producerId,
+              peerId: remotePeerId,
+              kind: streamInfo.track.kind,
+              hasVideo: streamInfo.track.kind === 'video',
+              trackEnabled: streamInfo.track.enabled,
+              streamId: streamInfo.stream.id
+            });
             this._emitEvent('remoteStreamAdded', streamInfo);
 
-            // Notify the server that we're ready to receive the stream
+            // Resume the consumer to start receiving media
             try {
               await this._state.peer.request('resumeConsumer', { consumerId });
               console.log('Consumer resumed:', consumerId);
@@ -1298,7 +1349,7 @@ class MediasoupService {
         this.stopScreenSharing();
       });
 
-      // Publish the screen sharing stream
+      // Publish the screen sharing stream DIRECTLY (don't use _publishStream for screen shares)
       if (this._state.connected && this._state.sendTransport) {
         const videoTrack = screenStream.getVideoTracks()[0];
         

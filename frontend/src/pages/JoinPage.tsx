@@ -1,4 +1,4 @@
-import { JoinForm } from '@/components/join/JoinForm';
+import { JoinForm } from '@/components/forms/JoinForm';
 
 export function JoinPage() {
   return (
@@ -59,7 +59,7 @@ export function JoinPage() {
             </div>
           </div>
           
-          <div className="w-full max-w-lg">
+          <div className="w-full max-w-lg space-y-6">
             <JoinForm />
           </div>
         </div>

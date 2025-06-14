@@ -2,23 +2,23 @@
   // exclude files from being shown in the file explorer
   "files.exclude": {
     // Config files
-    // "**/.cursor": true,
-    // "**/.depcheckrc.json": true,
-    // "**/.gitignore": true,
-    // "**/.husky": true,
-    // "**/.npmrc": true,
-    // "**/.swcrc": true,
-    // "**/.syncpackrc.json": true,
-    // "**/.turbo": true,
-    // "**/commitlint.config.js": true,
-    // "**/eslint.config.mjs": true,
+    "**/.cursor": true,
+    "**/.depcheckrc.json": true,
+    "**/.gitignore": true,
+    "**/.husky": true,
+    "**/.npmrc": true,
+    "**/.swcrc": true,
+    "**/.syncpackrc.json": true,
+    "**/.turbo": true,
+    "**/commitlint.config.js": true,
+    "**/eslint.config.mjs": true,
 
     // Build and dependency directories
     // "**/bin": true,
-    "**/dist": true
+    "**/dist": true,
     // "**/env": true,
-    // "**/node_modules": true
-    // "**/logs": true
+    "**/node_modules": true,
+    "**/logs": true
   },
 
   // explorer settings

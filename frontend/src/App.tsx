@@ -25,7 +25,7 @@ function App() {
       />
       <Routes>
         <Route path="/" element={<JoinPage />} />
-        <Route path="/room" element={<RoomPage />} />
+        <Route path="/room/:roomId" element={<RoomPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

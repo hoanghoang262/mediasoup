@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { mediasoupService, type MediaStreamInfo, type ConnectionState } from '@/services/MediasoupService';
+import { apiService, type Room } from '@/services/ApiService';
 import { toast } from 'sonner';
 
 // Track toast IDs to prevent duplicates
@@ -26,6 +27,7 @@ interface CallState {
   reconnectAttempt: number;
   maxReconnectAttempts: number;
   lastToastId: string | null;
+  currentRoom: Room | null;
   
   // Actions
   joinRoom: () => void;
@@ -35,14 +37,13 @@ interface CallState {
   toggleScreenShare: () => Promise<void>;
   setUserName: (name: string) => void;
   setRoomId: (id: string) => void;
+  setRoomData: (roomId: string, userName: string) => void;
+  checkServerHealth: () => Promise<boolean>;
 }
 
 // Helper to generate a user-friendly name from a peer ID
 const generateUserNameFromPeerId = (peerId: string): string => {
-  const prefixes = ['Guest', 'User', 'Visitor', 'Attendee', 'Member'];
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const shortId = peerId.substring(0, 4);
-  return `${prefix}-${shortId}`;
+  return peerId;
 };
 
 export const useCallStore = create<CallState>((set, get) => ({
@@ -61,16 +62,70 @@ export const useCallStore = create<CallState>((set, get) => ({
   reconnectAttempt: 0,
   maxReconnectAttempts: 3,
   lastToastId: null,
+  currentRoom: null,
   
   joinRoom: async () => {
     const { roomId, userName } = get();
+    
+    console.log('🚀 CallStore joinRoom called with:', { roomId, userName });
     
     if (!roomId || !userName) {
       console.error('Room ID and username must be provided');
       return;
     }
     
+    console.log('🔄 Starting join room process...');
     set({ isJoining: true });
+    
+    // First, check server health
+    const isServerHealthy = await get().checkServerHealth();
+    if (!isServerHealthy) {
+      toast.error('Server is not available', {
+        description: 'Please check if the backend server is running and try again.'
+      });
+      set({ isJoining: false });
+      return;
+    }
+    
+    try {
+      // Try to join room via API first (validates room existence)
+      const room = await apiService.joinRoom(roomId);
+      set({ currentRoom: room });
+      
+      toast.success('Room found, connecting...', {
+        duration: 2000
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Room does not exist') {
+        toast.error('Room not found', {
+          description: 'The room ID you entered does not exist. Please check and try again.',
+          action: {
+            label: 'Create Room',
+            onClick: async () => {
+              try {
+                const { roomId: newRoomId, room } = await apiService.createRoom();
+                set({ roomId: newRoomId, currentRoom: room });
+                toast.success('New room created', {
+                  description: `Room ID: ${newRoomId}`
+                });
+              } catch (createError) {
+                toast.error('Failed to create room', {
+                  description: createError instanceof Error ? createError.message : 'Unknown error'
+                });
+              }
+            }
+          }
+        });
+        set({ isJoining: false });
+        return;
+      } else {
+        toast.error('Failed to validate room', {
+          description: error instanceof Error ? error.message : 'Unknown error'
+        });
+        set({ isJoining: false });
+        return;
+      }
+    }
     
     // Add a connection timeout to prevent getting stuck on the loading screen
     const connectionTimeout = setTimeout(() => {
@@ -523,5 +578,18 @@ export const useCallStore = create<CallState>((set, get) => ({
   
   setRoomId: (id: string) => {
     set({ roomId: id });
+  },
+  
+  setRoomData: (roomId: string, userName: string) => {
+    set({ roomId, userName });
+  },
+  
+  checkServerHealth: async (): Promise<boolean> => {
+    try {
+      return await apiService.checkHealth();
+    } catch (error) {
+      console.error('Failed to check server health:', error);
+      return false;
+    }
   }
 })); 
