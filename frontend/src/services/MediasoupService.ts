@@ -1093,7 +1093,10 @@ class MediasoupService {
           producerId, 
           kind, 
           appData,
-          remotePeerId
+          remotePeerId,
+          appDataType: typeof appData,
+          appDataKeys: appData ? Object.keys(appData) : [],
+          mediaType: appData ? (appData as Record<string, unknown>).mediaType : undefined
         });
 
         // Ensure the remote peer is in our list of participants
@@ -1162,6 +1165,17 @@ class MediasoupService {
               peerId: remotePeerId,
             };
             this._state.remoteStreams.set(producerId, streamInfo);
+            
+            console.log('🔍 Debug remote stream creation:', {
+              producerId,
+              appData,
+              mediaType: appData.mediaType,
+              isScreenShareCheck: appData.mediaType === 'screen',
+              isScreenShareResult: streamInfo.isScreenShare,
+              trackKind: streamInfo.track.kind,
+              trackId: streamInfo.track.id,
+              peerId: remotePeerId
+            });
             
             console.log('Remote stream added:', {
               id: producerId,
@@ -1335,7 +1349,7 @@ class MediasoupService {
         this.stopScreenSharing();
       });
 
-      // Publish the screen sharing stream
+      // Publish the screen sharing stream DIRECTLY (don't use _publishStream for screen shares)
       if (this._state.connected && this._state.sendTransport) {
         const videoTrack = screenStream.getVideoTracks()[0];
         

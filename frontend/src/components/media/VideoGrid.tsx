@@ -46,8 +46,39 @@ export function VideoGrid({
   console.log('🎥 VideoGrid render:', {
     userIds,
     remoteStreamsCount: remoteStreams.length,
-    remoteStreams: remoteStreams.map(s => ({ id: s.id, peerId: s.peerId, isScreenShare: s.isScreenShare, kind: s.track?.kind })),
+    remoteStreams: remoteStreams.map(s => ({ 
+      id: s.id, 
+      peerId: s.peerId, 
+      isScreenShare: s.isScreenShare, 
+      kind: s.track?.kind,
+      trackId: s.track?.id
+    })),
     remoteUserNames
+  });
+
+  // Find remote screen shares với debug chi tiết
+  console.log('🔍 Filtering for screen shares...');
+  const remoteScreenShares = remoteStreams.filter((stream, index) => {
+    console.log(`🔍 Stream ${index}:`, {
+      id: stream.id,
+      peerId: stream.peerId,
+      isScreenShare: stream.isScreenShare,
+      trackKind: stream.track?.kind,
+      willInclude: stream.isScreenShare
+    });
+    return stream.isScreenShare;
+  });
+  
+  console.log('🖥️ Screen shares found:', {
+    localScreenSharing: isScreenSharing,
+    totalRemoteStreams: remoteStreams.length,
+    remoteScreenSharesCount: remoteScreenShares.length,
+    remoteScreenShares: remoteScreenShares.map(s => ({ 
+      id: s.id, 
+      peerId: s.peerId, 
+      trackKind: s.track?.kind,
+      isScreenShare: s.isScreenShare
+    }))
   });
 
   // Calculate total participants
@@ -70,7 +101,7 @@ export function VideoGrid({
     
   return (
     <div className={gridClassName}>
-      {/* Screen share (if active) */}
+      {/* Local Screen share (if active) */}
       {isScreenSharing && screenSharingStream && (
         <div className="col-span-full aspect-video mb-4">
           <VideoStream
@@ -83,6 +114,25 @@ export function VideoGrid({
           </div>
         </div>
       )}
+      
+      {/* Remote Screen shares */}
+      {remoteScreenShares.map((screenShareStream) => {
+        const sharerName = remoteUserNames[screenShareStream.peerId] || screenShareStream.peerId.substring(0, 8);
+        const cleanSharerName = sharerName.startsWith('User ') ? sharerName.substring(5) : sharerName;
+        
+        return (
+          <div key={`screen-${screenShareStream.id}`} className="col-span-full aspect-video mb-4">
+            <VideoStream
+              stream={screenShareStream.stream}
+              muted={false}
+              className="w-full h-full rounded-lg"
+            />
+            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
+              {cleanSharerName} (Screen Share)
+            </div>
+          </div>
+        );
+      })}
       
       {/* Local video */}
       <div className="relative aspect-video">
