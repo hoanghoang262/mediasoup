@@ -1,50 +1,47 @@
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { type VariantProps } from "class-variance-authority"
+import React from "react";
+import { cn } from "@/lib/utils";
 
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "./Button.variants"
+// Button variants directly defined here
+const buttonVariants = {
+  default: "bg-blue-600 hover:bg-blue-500 text-white",
+  secondary: "bg-gray-600 hover:bg-gray-500 text-white",
+  destructive: "bg-red-600 hover:bg-red-500 text-white",
+  outline: "border border-gray-300 hover:bg-gray-100 text-gray-900",
+  ghost: "hover:bg-gray-100 text-gray-900",
+};
 
-export type ButtonVariant = 
-  | 'primary' 
-  | 'secondary' 
-  | 'success' 
-  | 'warning' 
-  | 'danger' 
-  | 'ghost' 
-  | 'outline';
-
-export type ButtonSize = 'sm' | 'md' | 'lg';
-
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  loading?: boolean;
-  icon?: React.ReactNode;
-  iconPosition?: 'left' | 'right';
-  fullWidth?: boolean;
-  asChild?: boolean;
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: keyof typeof buttonVariants;
+  size?: "sm" | "md" | "lg";
+  children: React.ReactNode;
 }
 
-function Button({
+export const Button: React.FC<ButtonProps> = ({
+  variant = "default",
+  size = "md",
   className,
-  variant,
-  size,
-  asChild = false,
+  children,
   ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot : "button"
+}) => {
+  const sizeClasses = {
+    sm: "px-3 py-1.5 text-sm",
+    md: "px-4 py-2",
+    lg: "px-6 py-3 text-lg",
+  };
 
   return (
-    <Comp
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+    <button
+      className={cn(
+        "inline-flex items-center justify-center rounded-md font-medium transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        "disabled:pointer-events-none disabled:opacity-50",
+        buttonVariants[variant],
+        sizeClasses[size],
+        className
+      )}
       {...props}
-    />
-  )
-}
-
-export { Button }
+    >
+      {children}
+    </button>
+  );
+};

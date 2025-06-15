@@ -1,285 +1,210 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-
-import { VideoGrid } from '@/components/media/VideoGrid';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { RoomLayout } from '@/components/layout/RoomLayout';
-import { LoadingScreen, EmptyRoomState, ParticipantsList } from '@/components/ui';
+import { UsernamePrompt } from '@/components/forms/UsernamePrompt';
 import { useCallStore } from '@/store/callStore';
 import { checkServerAndNotify } from '@/utils/serverCheck';
-import { mediasoupService } from '@/services/MediasoupService';
+import { toast } from 'sonner';
 
-// Track toast IDs to prevent duplicates
-const activeToastIds = new Set<string>();
 
-// Maximum time to wait in loading state before showing retry option (in ms)
-const MAX_LOADING_TIME = 20000; // 20 seconds
 
 /**
- * RoomPage is the main page for the video conference room
+ * Room page sử dụng Google Meet style layout
  */
-export function RoomPage() {
+export const RoomPage: React.FC = () => {
+  const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { roomId: urlRoomId } = useParams<{ roomId: string }>();
-  const [searchParams] = useSearchParams();
-  const urlUserName = searchParams.get('userName');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [localUserName, setLocalUserName] = useState<string>('');
+  const [showUsernamePrompt, setShowUsernamePrompt] = useState(false);
+  const [isJoining] = useState(false);
   
-  const { 
-    roomId, 
-    userName, 
-    setRoomData,
-    joinRoom, 
-    leaveRoom,
-    localStream, 
+  // Check if username is provided in URL or prompt user
+  useEffect(() => {
+    const userNameFromUrl = searchParams.get('userName');
+    if (userNameFromUrl && userNameFromUrl.trim()) {
+      setLocalUserName(decodeURIComponent(userNameFromUrl.trim()));
+      setShowUsernamePrompt(false);
+    } else {
+      setShowUsernamePrompt(true);
+    }
+  }, [searchParams]);
+
+  // Handle username submission from prompt
+  const handleUsernameSubmit = (username: string) => {
+    setLocalUserName(username);
+    setShowUsernamePrompt(false);
+    
+    // Update URL to include username for future reference
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('userName', encodeURIComponent(username));
+    setSearchParams(newSearchParams, { replace: true });
+  };
+  
+  const {
+    // State
+    localStream,
     remoteStreams,
     users,
-    isJoining, 
-    isConnected,
-    connectionStatus
+    isAudioEnabled,
+    isVideoEnabled,
+    isScreenSharing,
+    connectionStatus,
+    reconnectAttempt,
+    
+    // Actions
+    joinRoom,
+    leaveRoom,
+    toggleAudio,
+    toggleVideo,
+    toggleScreenShare,
+    setRoomData,
   } = useCallStore();
-  const [serverChecked, setServerChecked] = useState(false);
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [allParticipantIds, setAllParticipantIds] = useState<string[]>([]);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [loadingStartTime, setLoadingStartTime] = useState<number>(0);
-  const [showRetry, setShowRetry] = useState(false);
-  
-  // Generate a list of users for the participants list
-  const usersList = Array.from(users.values()).map(user => ({
-    id: user.id,
-    name: user.name
-  }));
-  
-  // Create a mapping of peer IDs to names
-  const remoteUserNames: Record<string, string> = {};
-  users.forEach((user) => {
-    remoteUserNames[user.id] = user.name;
-  });
 
-  // Reset loading timer when joining state changes
+  // Join room when we have both roomId and username
   useEffect(() => {
-    if (isJoining) {
-      setLoadingStartTime(Date.now());
-      setShowRetry(false);
-      
-      // Set a timeout to show retry button after MAX_LOADING_TIME
-      const timeoutId = setTimeout(() => {
-        if (isJoining && !isConnected) {
-          setShowRetry(true);
-        }
-      }, MAX_LOADING_TIME);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isJoining, isConnected]);
-
-  useEffect(() => {
-    // Get roomId and userName from URL
-    if (!urlRoomId || !urlUserName) {
-      console.log('Missing roomId or userName in URL, redirecting to join page');
+    if (!roomId) {
       navigate('/');
       return;
     }
 
-    // Set room data in store if not already set or different
-    if (roomId !== urlRoomId || userName !== urlUserName) {
-      console.log('Setting room data:', { roomId: urlRoomId, userName: urlUserName });
-      setRoomData(urlRoomId, urlUserName);
-    }
-  }, [urlRoomId, urlUserName, roomId, userName, setRoomData, navigate]);
-
-  useEffect(() => {
-    // Only proceed if we have room data set in store
-    if (!roomId || !userName) {
+    // Only join if we have a username and we're not showing the username prompt
+    if (!localUserName || showUsernamePrompt) {
       return;
     }
 
-    // Check if the server is running before attempting to join
-    const checkServer = async () => {
-      const isRunning = await checkServerAndNotify();
-      setServerChecked(true);
-      
-      if (isRunning) {
-        // Join the room only if the server is running
-        joinRoom();
-      } else {
-        // Show error and provide a retry button
-        const toastId = 'connection-failed';
-        
-        // Only show toast if it's not already displayed
-        if (!activeToastIds.has(toastId)) {
-          activeToastIds.add(toastId);
-          
-          toast.error('Unable to connect to server', {
-            id: toastId,
-            description: 'The connection to the video conferencing server failed.',
-            action: {
-              label: 'Retry',
-              onClick: () => checkServer(),
-            },
-            duration: 0, // Persistent notification
-            onDismiss: () => {
-              activeToastIds.delete(toastId);
-            }
-          });
+    const initializeRoom = async () => {
+      try {
+        // Check server connectivity first
+        const serverRunning = await checkServerAndNotify();
+        if (!serverRunning) {
+          toast.error('Cannot connect to server. Please try again later.');
+          return;
         }
-      }
-    };
-    
-    checkServer();
 
-    // Setup participant tracking
-    const handleParticipantJoined = (...args: unknown[]) => {
-      const peerId = args[0];
-      if (typeof peerId === 'string') {
-        // Track in participants list
-        setParticipants(prev => {
-          if (!prev.includes(peerId)) {
-            return [...prev, peerId];
-          }
-          return prev;
-        });
-        
-        // Also add to comprehensive ID list used for the grid
-        setAllParticipantIds(prev => {
-          if (!prev.includes(peerId)) {
-            return [...prev, peerId];
-          }
-          return prev;
-        });
+        // Set room data and join
+        console.log('🚀 Joining room:', roomId, 'as', localUserName);
+        setRoomData(roomId, localUserName);
+        await joinRoom();
+      } catch (error) {
+        console.error('❌ Failed to join room:', error);
+        toast.error('Failed to join room. Please check your connection.');
       }
     };
 
-    const handleParticipantLeft = (...args: unknown[]) => {
-      const peerId = args[0];
-      if (typeof peerId === 'string') {
-        // Remove from both lists
-        setParticipants(prev => prev.filter(id => id !== peerId));
-        setAllParticipantIds(prev => prev.filter(id => id !== peerId));
-      }
-    };
+    initializeRoom();
 
-    // Listen for participant events
-    mediasoupService.addEventListener('participantJoined', handleParticipantJoined);
-    mediasoupService.addEventListener('participantLeft', handleParticipantLeft);
-
-    // Initialize with current remotePeers from service
-    const currentPeers = Array.from(mediasoupService.state.remotePeers);
-    setParticipants(currentPeers);
-    setAllParticipantIds(currentPeers);
-
-    // Cleanup listeners on unmount and leave the room
+    // Cleanup on unmount
     return () => {
-      mediasoupService.removeEventListener('participantJoined', handleParticipantJoined);
-      mediasoupService.removeEventListener('participantLeft', handleParticipantLeft);
-      
-      // Leave the room when component unmounts to clean up connections
       leaveRoom();
     };
-  }, [roomId, userName, joinRoom, leaveRoom, navigate]);
+  }, [roomId, localUserName, showUsernamePrompt, joinRoom, leaveRoom, navigate, setRoomData]);
 
-  // Create an array from the remote streams Map
-  const remoteStreamsArray = Array.from(remoteStreams.values());
-
-  // Toggle the invite modal
-  const toggleInviteModal = () => {
-    setShowInviteModal(!showInviteModal);
-  };
-
-  // Function to handle retry
-  const handleRetry = () => {
-    // Reset connection state and try again
-    leaveRoom();
-    joinRoom();
-  };
-
-  // Render loading screen if not connected yet
-  if (!serverChecked || (isJoining && !isConnected)) {
-    // Calculate how long we've been loading
-    const loadingTime = Date.now() - loadingStartTime;
-    const loadingTooLong = loadingTime > MAX_LOADING_TIME;
-    
-    let loadingTitle = !serverChecked ? 'Checking server...' : 'Joining meeting...';
-    let loadingDescription = !serverChecked 
-      ? 'Verifying connection to media server' 
-      : 'Setting up your secure connection';
-    
-    // If connection failed or taking too long, update message
-    if (connectionStatus === 'failed' || loadingTooLong) {
-      loadingTitle = 'Connection problem';
-      loadingDescription = 'Having trouble connecting to the meeting room';
+  // Handle leave meeting
+  const handleLeaveMeeting = async () => {
+    try {
+      await leaveRoom();
+      navigate('/');
+    } catch (error) {
+      console.error('❌ Failed to leave room:', error);
+      // Navigate anyway
+      navigate('/');
     }
-    
+  };
+
+  // Handle end meeting (host only)
+  const handleEndMeeting = async () => {
+    try {
+      // Could implement end meeting for all participants
+      toast.info('End meeting for all participants not implemented yet');
+      await handleLeaveMeeting();
+    } catch (error) {
+      console.error('❌ Failed to end meeting:', error);
+    }
+  };
+
+  // Show username prompt if no username provided
+  if (showUsernamePrompt) {
     return (
-      <RoomLayout roomId={roomId || ''} userName={userName || ''} localStream={null}>
-        <LoadingScreen 
-          title={loadingTitle}
-          description={loadingDescription}
-          showRetry={showRetry || connectionStatus === 'failed'}
-          onRetry={handleRetry}
-        />
-      </RoomLayout>
+      <UsernamePrompt
+        roomId={roomId || 'unknown'}
+        onUsernameSubmit={handleUsernameSubmit}
+        isLoading={isJoining}
+      />
     );
   }
 
-  // Render the room when connected
-  return (
-    <RoomLayout roomId={roomId} userName={userName} localStream={localStream}>
-      <div className="py-6">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold">Meeting Room</h2>
-            <p className="text-muted-foreground text-sm mt-1">
-              {participants.length === 0 
-                ? 'You are the only one here' 
-                : `${participants.length + 1} participants in the room`}
-            </p>
-          </div>
-          
-          <button 
-            onClick={toggleInviteModal}
-            className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors text-sm font-medium text-primary"
+  // Show loading state
+  if (!roomId) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <div className="text-2xl mb-4">⚠️</div>
+          <div>Invalid room ID</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while connecting (only if we have username)
+  if (connectionStatus === 'connecting' && localUserName) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <div>Connecting to room...</div>
+          <div className="text-sm text-gray-400 mt-2">Room: {roomId}</div>
+          <div className="text-sm text-gray-400 mt-1">User: {localUserName}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (connectionStatus === 'failed') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <div className="text-2xl mb-4">❌</div>
+          <div className="mb-4">Failed to connect to room</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Invite
+            Try Again
           </button>
         </div>
-        
-        {/* Video grid with all participants */}
-        <VideoGrid
-          localStream={localStream}
-          localUserName={userName}
-          remoteStreams={remoteStreamsArray}
-          remoteUserNames={remoteUserNames}
-          userIds={allParticipantIds}
-        />
-        
-        {/* Invite others modal (replaced EmptyRoomState) */}
-        {showInviteModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={toggleInviteModal}>
-            <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-medium mb-4">Invite others to this room</h3>
-              <EmptyRoomState roomId={roomId} />
-              <div className="mt-6 flex justify-end">
-                <button 
-                  className="px-4 py-2 rounded-md bg-muted hover:bg-muted/80 text-sm font-medium"
-                  onClick={toggleInviteModal}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Participants list (floating panel) */}
-        <ParticipantsList 
-          users={usersList}
-          roomId={roomId}
-        />
       </div>
-    </RoomLayout>
+    );
+  }
+
+  return (
+    <RoomLayout
+      roomId={roomId}
+      localUserName={localUserName}
+      localStream={localStream}
+      remoteStreams={Array.from(remoteStreams.values())}
+      remoteUserNames={Object.fromEntries(
+        Array.from(users.entries()).map(([id, user]) => [id, user.name])
+      )}
+      userIds={Array.from(users.keys()).filter(id => id !== 'local')}
+      
+      // Meeting controls state
+      isAudioEnabled={isAudioEnabled}
+      isVideoEnabled={isVideoEnabled}
+      isScreenSharing={isScreenSharing}
+      isHost={true} // Could be dynamic based on room settings
+      
+      // Event handlers
+      onToggleAudio={toggleAudio}
+      onToggleVideo={toggleVideo}
+      onToggleScreenShare={toggleScreenShare}
+      onLeaveMeeting={handleLeaveMeeting}
+      onEndMeeting={handleEndMeeting}
+      
+      // Connection info
+      connectionStatus={connectionStatus}
+      reconnectAttempts={reconnectAttempt}
+    />
   );
-} 
+}; 

@@ -85,32 +85,32 @@ export function VideoGrid({
   const totalParticipants = userIds.length + 1; // +1 for local user
   
   // Determine grid layout based on participant count
-  let gridClassName = 'grid gap-4';
+  let gridClassName = 'grid gap-6';
   
   if (totalParticipants <= 1) {
     gridClassName += ' grid-cols-1';
   } else if (totalParticipants === 2) {
-    gridClassName += ' grid-cols-2';
+    gridClassName += ' grid-cols-1 md:grid-cols-2';
   } else if (totalParticipants <= 4) {
-    gridClassName += ' grid-cols-2';
+    gridClassName += ' grid-cols-1 md:grid-cols-2';
   } else if (totalParticipants <= 6) {
-    gridClassName += ' grid-cols-3';
+    gridClassName += ' grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
   } else {
-    gridClassName += ' grid-cols-4';
+    gridClassName += ' grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
   }
     
   return (
-    <div className={gridClassName}>
+    <div className={`${gridClassName} h-full`}>
       {/* Local Screen share (if active) */}
       {isScreenSharing && screenSharingStream && (
-        <div className="col-span-full aspect-video mb-4">
+        <div className="col-span-full aspect-video mb-6 relative">
           <VideoStream
             stream={screenSharingStream}
             muted={true}
-            className="w-full h-full rounded-lg"
+            className="w-full h-full rounded-2xl shadow-2xl border-2 border-secondary/30"
           />
-          <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-            {localUserName} (Screen Share)
+          <div className="absolute bottom-4 left-4 bg-secondary/90 backdrop-blur text-secondary-foreground px-4 py-2 rounded-lg font-medium shadow-lg">
+            🖥️ {localUserName} (Screen Share)
           </div>
         </div>
       )}
@@ -121,14 +121,14 @@ export function VideoGrid({
         const cleanSharerName = sharerName.startsWith('User ') ? sharerName.substring(5) : sharerName;
         
         return (
-          <div key={`screen-${screenShareStream.id}`} className="col-span-full aspect-video mb-4">
+          <div key={`screen-${screenShareStream.id}`} className="col-span-full aspect-video mb-6 relative">
             <VideoStream
               stream={screenShareStream.stream}
               muted={false}
-              className="w-full h-full rounded-lg"
+              className="w-full h-full rounded-2xl shadow-2xl border-2 border-secondary/30"
             />
-            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-              {cleanSharerName} (Screen Share)
+            <div className="absolute bottom-4 left-4 bg-secondary/90 backdrop-blur text-secondary-foreground px-4 py-2 rounded-lg font-medium shadow-lg">
+              🖥️ {cleanSharerName} (Screen Share)
             </div>
           </div>
         );
@@ -139,10 +139,10 @@ export function VideoGrid({
         <VideoStream
           stream={localStream}
           muted={true}
-          className="w-full h-full rounded-lg"
+          className="w-full h-full rounded-2xl shadow-xl border-2 border-primary/30"
         />
-        <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-          {localUserName} (You)
+        <div className="absolute bottom-3 left-3 bg-primary/90 backdrop-blur text-primary-foreground px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg">
+          📹 {localUserName} (You)
         </div>
       </div>
       
@@ -183,18 +183,19 @@ export function VideoGrid({
           <div key={userId} className="relative aspect-video">
             <VideoStream
               stream={combinedStream}
-              className="w-full h-full rounded-lg"
+              className="w-full h-full rounded-2xl shadow-xl border-2 border-border/30"
               placeholder={
-                <div className="flex items-center justify-center h-full bg-gray-800 text-white rounded-lg">
+                <div className="flex items-center justify-center h-full bg-gradient-to-br from-muted to-muted/50 text-muted-foreground rounded-2xl border-2 border-border/30">
                   <div className="text-center">
-                    <div className="text-2xl mb-2">👤</div>
-                    <div className="text-sm">{userName}</div>
+                    <div className="text-4xl mb-3">👤</div>
+                    <div className="text-base font-medium">{userName}</div>
+                    <div className="text-sm text-muted-foreground/70 mt-1">Waiting for video...</div>
                   </div>
                 </div>
               }
             />
-            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-              {userName}
+            <div className="absolute bottom-3 left-3 bg-muted/90 backdrop-blur text-muted-foreground px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg">
+              👥 {userName}
             </div>
           </div>
         );

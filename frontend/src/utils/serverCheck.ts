@@ -2,9 +2,15 @@
  * Utility to check if the backend server is running
  */
 import { toast } from 'sonner';
+import { apiConfig } from '../config/env.config';
 
-// Backend server URL configuration
-const BACKEND_URL = 'http://localhost:3000';
+// Backend server URL configuration - use centralized config
+const getBackendUrl = (): string => {
+  // Remove '/api' suffix if present to get base URL
+  return apiConfig.url.replace('/api', '');
+};
+
+const BACKEND_URL = getBackendUrl();
 
 // Connection timeout in milliseconds
 const CONNECTION_TIMEOUT = 5000;

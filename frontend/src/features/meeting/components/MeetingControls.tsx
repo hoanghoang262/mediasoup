@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { useMediaDevices } from '@/hooks/useMediaDevices';
 
 /**
  * Meeting controls props
@@ -18,10 +19,10 @@ export interface MeetingControlsProps {
 }
 
 /**
- * Google Meet style icons for controls
+ * Google Meet style icons for controls - Bigger and more prominent
  */
 const MicIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+  <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
     {enabled ? (
       <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
     ) : (
@@ -33,7 +34,7 @@ const MicIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
 );
 
 const VideoIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+  <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
     {enabled ? (
       <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
     ) : (
@@ -45,11 +46,11 @@ const VideoIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
 );
 
 const ScreenShareIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+  <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
     {enabled ? (
       <>
         <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-        <circle cx="12" cy="11" r="2"/>
+        <circle cx="12" cy="11" r="2" fill="white"/>
       </>
     ) : (
       <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
@@ -58,13 +59,13 @@ const ScreenShareIcon: React.FC<{ enabled: boolean }> = ({ enabled }) => (
 );
 
 const LeaveIcon: React.FC = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+  <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
     <path d="M16 13h-3V3h-2v10H8l4 4 4-4zM4 19v2h16v-2H4z"/>
   </svg>
 );
 
 /**
- * Meeting controls component
+ * Meeting controls component - Enhanced UI
  */
 export const MeetingControls: React.FC<MeetingControlsProps> = ({
   isAudioEnabled,
@@ -78,65 +79,98 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
   onEndMeeting,
   className,
 }) => {
+  const { hasCamera, hasMicrophone, hasScreenShare, isLoading } = useMediaDevices();
+
+  // Disable buttons khi không có devices hoặc đang loading
+  const canUseAudio = hasMicrophone && !isLoading;
+  const canUseVideo = hasCamera && !isLoading;
+  const canUseScreenShare = hasScreenShare && !isLoading;
+
   return (
     <div className={cn(
-      'flex items-center justify-center gap-3 px-6 py-4',
-      'bg-gray-800/95 backdrop-blur-md rounded-full shadow-2xl',
-      'border border-gray-700',
+      'flex items-center justify-center gap-4 px-8 py-6 relative z-50',
+      'bg-background/95 backdrop-blur-lg rounded-2xl shadow-2xl',
+      'border border-border',
+      'ring-1 ring-ring/20',
       className
     )}>
       {/* Audio Control */}
       <button
         onClick={onToggleAudio}
+        disabled={!canUseAudio}
         className={cn(
-          'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200',
-          'hover:scale-110 active:scale-95',
-          isAudioEnabled 
-            ? 'bg-gray-600 hover:bg-gray-500 text-white' 
-            : 'bg-red-600 hover:bg-red-500 text-white'
+          'w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200',
+          'hover:scale-105 active:scale-95 transform',
+          'shadow-lg ring-2 ring-offset-2 ring-offset-background',
+          !canUseAudio 
+            ? 'opacity-30 cursor-not-allowed hover:scale-100 bg-muted ring-muted-foreground/20' 
+            : canUseAudio && isAudioEnabled 
+              ? 'bg-primary hover:bg-primary/90 text-primary-foreground ring-primary/50' 
+              : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground ring-destructive/50'
         )}
-        title={isAudioEnabled ? 'Tắt micro' : 'Bật micro'}
+        title={
+          !canUseAudio 
+            ? 'Không có microphone' 
+            : (isAudioEnabled ? 'Tắt micro' : 'Bật micro')
+        }
       >
-        <MicIcon enabled={isAudioEnabled} />
+        <MicIcon enabled={isAudioEnabled && canUseAudio} />
       </button>
 
       {/* Video Control */}
       <button
         onClick={onToggleVideo}
+        disabled={!canUseVideo}
         className={cn(
-          'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200',
-          'hover:scale-110 active:scale-95',
-          isVideoEnabled 
-            ? 'bg-gray-600 hover:bg-gray-500 text-white' 
-            : 'bg-red-600 hover:bg-red-500 text-white'
+          'w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200',
+          'hover:scale-105 active:scale-95 transform',
+          'shadow-lg ring-2 ring-offset-2 ring-offset-background',
+          !canUseVideo 
+            ? 'opacity-30 cursor-not-allowed hover:scale-100 bg-muted ring-muted-foreground/20' 
+            : canUseVideo && isVideoEnabled 
+              ? 'bg-primary hover:bg-primary/90 text-primary-foreground ring-primary/50' 
+              : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground ring-destructive/50'
         )}
-        title={isVideoEnabled ? 'Tắt camera' : 'Bật camera'}
+        title={
+          !canUseVideo 
+            ? 'Không có camera' 
+            : (isVideoEnabled ? 'Tắt camera' : 'Bật camera')
+        }
       >
-        <VideoIcon enabled={isVideoEnabled} />
+        <VideoIcon enabled={isVideoEnabled && canUseVideo} />
       </button>
 
       {/* Screen Share Control */}
       <button
         onClick={onToggleScreenShare}
+        disabled={!canUseScreenShare}
         className={cn(
-          'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200',
-          'hover:scale-110 active:scale-95',
-          isScreenSharing 
-            ? 'bg-blue-600 hover:bg-blue-500 text-white' 
-            : 'bg-gray-600 hover:bg-gray-500 text-white'
+          'w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200',
+          'hover:scale-105 active:scale-95 transform',
+          'shadow-lg ring-2 ring-offset-2 ring-offset-background',
+          !canUseScreenShare 
+            ? 'opacity-30 cursor-not-allowed hover:scale-100 bg-muted ring-muted-foreground/20' 
+            : canUseScreenShare && isScreenSharing 
+              ? 'bg-secondary hover:bg-secondary/90 text-secondary-foreground ring-secondary/50' 
+              : 'bg-muted hover:bg-muted/90 text-muted-foreground ring-muted-foreground/20'
         )}
-        title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+        title={
+          !canUseScreenShare 
+            ? 'Screen sharing không được hỗ trợ' 
+            : (isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình')
+        }
       >
-        <ScreenShareIcon enabled={isScreenSharing} />
+        <ScreenShareIcon enabled={isScreenSharing && canUseScreenShare} />
       </button>
 
       {/* Leave Meeting */}
       <button
         onClick={onLeaveMeeting}
         className={cn(
-          'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200',
-          'hover:scale-110 active:scale-95',
-          'bg-red-600 hover:bg-red-500 text-white'
+          'w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200',
+          'hover:scale-105 active:scale-95 transform',
+          'bg-destructive hover:bg-destructive/90 text-destructive-foreground',
+          'shadow-lg ring-2 ring-destructive/50 ring-offset-2 ring-offset-background'
         )}
         title="Rời khỏi cuộc họp"
       >
@@ -148,9 +182,10 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
         <button
           onClick={onEndMeeting}
           className={cn(
-            'px-4 py-2 rounded-full transition-all duration-200',
-            'hover:scale-105 active:scale-95',
-            'bg-red-700 hover:bg-red-600 text-white text-sm font-medium'
+            'px-6 py-3 rounded-xl transition-all duration-200',
+            'hover:scale-105 active:scale-95 transform',
+            'bg-destructive hover:bg-destructive/90 text-destructive-foreground text-base font-semibold',
+            'shadow-lg ring-2 ring-destructive/50 ring-offset-2 ring-offset-background'
           )}
           title="Kết thúc cuộc họp cho tất cả"
         >

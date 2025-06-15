@@ -1,9 +1,11 @@
+import { apiConfig } from '../config/env.config';
+
 // API Service để tương tác với backend REST endpoints
 class ApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    this.baseURL = apiConfig.url;
     console.log('🔧 ApiService baseURL:', this.baseURL);
   }
 

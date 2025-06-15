@@ -3,6 +3,7 @@ import * as mediasoupClient from 'mediasoup-client';
 import { Device } from 'mediasoup-client';
 import { toast } from 'sonner';
 
+import { wsConfig } from '../config/env.config';
 import type { 
   MediasoupTransportResponse, 
   MediasoupProduceResponse
@@ -183,8 +184,8 @@ class MediasoupService {
       this._state.peerId = peerId;
 
       // Create WebSocket connection with backend-compatible URL format
-      // Backend expects: ws://localhost:3000?roomId=abc&peerId=user123
-      const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:3000`;
+      // Backend expects: ws://hostname:port?roomId=abc&peerId=user123
+      const wsUrl = wsConfig.url;
       const protooUrl = `${wsUrl}?roomId=${roomId}&peerId=${peerId}`;
       
       console.log(`Connecting to ${protooUrl}`);
