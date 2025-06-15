@@ -64,6 +64,12 @@ const LeaveIcon: React.FC = () => (
   </svg>
 );
 
+const EndMeetingIcon: React.FC = () => (
+  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
+  </svg>
+);
+
 /**
  * Meeting controls component - Enhanced UI
  */
@@ -165,14 +171,14 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
         <button
           onClick={onEndMeeting}
           className={cn(
-            'px-4 py-2 rounded-lg transition-all duration-200',
+            'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200',
             'hover:scale-105 active:scale-95 transform',
-            'bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm font-medium',
-            'shadow-md'
+            'bg-destructive hover:bg-destructive/90 text-destructive-foreground',
+            'shadow-md ring-2 ring-destructive/30'
           )}
           title="Kết thúc cuộc họp cho tất cả"
         >
-          End Meeting
+          <EndMeetingIcon />
         </button>
       ) : (
         <button

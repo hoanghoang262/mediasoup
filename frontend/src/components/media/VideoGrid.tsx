@@ -99,40 +99,53 @@ export function VideoGrid({
     gridClassName += ' grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
   }
     
+    // Check if there are any screen shares
+  const hasScreenShares = isScreenSharing || remoteScreenShares.length > 0;
+
   return (
-    <div className={`${gridClassName} h-full`}>
-      {/* Local Screen share (if active) */}
-      {isScreenSharing && screenSharingStream && (
-        <div className="col-span-full aspect-video mb-6 relative">
-          <VideoStream
-            stream={screenSharingStream}
-            muted={true}
-            className="w-full h-full rounded-2xl shadow-2xl border-2 border-secondary/30"
-          />
-          <div className="absolute bottom-4 left-4 bg-secondary/90 backdrop-blur text-secondary-foreground px-4 py-2 rounded-lg font-medium shadow-lg">
-            🖥️ {localUserName} (Screen Share)
+    <div className="h-full flex flex-col gap-4">
+      {/* Screen Share Section - Fixed height instead of taking all space */}
+      {hasScreenShares && (
+        <div className="flex-shrink-0" style={{ height: '40%' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+            {/* Local Screen share (if active) */}
+            {isScreenSharing && screenSharingStream && (
+              <div className="relative h-full">
+                <VideoStream
+                  stream={screenSharingStream}
+                  muted={true}
+                  className="w-full h-full rounded-xl shadow-lg border-2 border-secondary/30"
+                />
+                <div className="absolute bottom-2 left-2 bg-secondary/90 backdrop-blur text-secondary-foreground px-3 py-1 rounded text-sm font-medium shadow-md">
+                  🖥️ {localUserName} (Screen)
+                </div>
+              </div>
+            )}
+            
+            {/* Remote Screen shares */}
+            {remoteScreenShares.map((screenShareStream) => {
+              const sharerName = remoteUserNames[screenShareStream.peerId] || screenShareStream.peerId.substring(0, 8);
+              const cleanSharerName = sharerName.startsWith('User ') ? sharerName.substring(5) : sharerName;
+              
+              return (
+                <div key={`screen-${screenShareStream.id}`} className="relative h-full">
+                  <VideoStream
+                    stream={screenShareStream.stream}
+                    muted={false}
+                    className="w-full h-full rounded-xl shadow-lg border-2 border-secondary/30"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-secondary/90 backdrop-blur text-secondary-foreground px-3 py-1 rounded text-sm font-medium shadow-md">
+                    🖥️ {cleanSharerName} (Screen)
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
-      
-      {/* Remote Screen shares */}
-      {remoteScreenShares.map((screenShareStream) => {
-        const sharerName = remoteUserNames[screenShareStream.peerId] || screenShareStream.peerId.substring(0, 8);
-        const cleanSharerName = sharerName.startsWith('User ') ? sharerName.substring(5) : sharerName;
-        
-        return (
-          <div key={`screen-${screenShareStream.id}`} className="col-span-full aspect-video mb-6 relative">
-            <VideoStream
-              stream={screenShareStream.stream}
-              muted={false}
-              className="w-full h-full rounded-2xl shadow-2xl border-2 border-secondary/30"
-            />
-            <div className="absolute bottom-4 left-4 bg-secondary/90 backdrop-blur text-secondary-foreground px-4 py-2 rounded-lg font-medium shadow-lg">
-              🖥️ {cleanSharerName} (Screen Share)
-            </div>
-          </div>
-        );
-      })}
+
+      {/* Video Grid Section - Takes remaining space */}
+      <div className={`${gridClassName} ${hasScreenShares ? 'flex-1' : 'h-full'} min-h-0`}>
       
       {/* Local video */}
       <div className="relative aspect-video">
@@ -200,6 +213,7 @@ export function VideoGrid({
           </div>
         );
       })}
+      </div>
     </div>
   );
 } 
