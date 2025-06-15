@@ -100,6 +100,8 @@ export function useMediaDevices() {
         hasScreenShare,
         camerasCount: cameras.length,
         microphonesCount: microphones.length,
+        permissionGranted,
+        userAgent: navigator.userAgent.slice(0, 50),
       });
 
     } catch (error) {

@@ -132,40 +132,33 @@ export function RoomLayout({
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* 📍 PHẦN 1: HEADER TRÊN */}
-      <header className="flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm border-b border-border shadow-lg">
+      {/* 📍 PHẦN 1: HEADER SIMPLE - không giống navbar */}
+      <header className="flex items-center justify-between px-6 py-3 bg-background border-b border-border">
         {/* Left - Room info */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="text-foreground">
-            <h1 className="font-semibold text-lg">Meeting Room</h1>
-            <p className="text-sm text-muted-foreground">Room: {roomId}</p>
+            <h1 className="font-medium text-base">{roomId}</h1>
           </div>
         </div>
 
-        {/* Center - Time */}
-        <div className="flex items-center gap-4">
-          <div className="text-foreground text-base font-medium">
-            {new Date().toLocaleTimeString()}
-          </div>
-        </div>
-
-        {/* Right - Status & Sidebar toggle */}
+        {/* Center - Connection Status - đưa ra đây để không bị che */}
         <div className="flex items-center gap-3">
           <ConnectionStatus stats={connectionStats} />
-          
+        </div>
+
+        {/* Right - Sidebar toggle */}
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className={cn(
-              'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200',
-              'hover:scale-105 transform shadow-lg',
-              sidebarOpen 
-                ? 'bg-primary hover:bg-primary/90 text-primary-foreground ring-2 ring-primary/50' 
-                : 'bg-secondary hover:bg-secondary/90 text-secondary-foreground ring-2 ring-border'
+              'w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200',
+              'hover:bg-muted text-muted-foreground hover:text-foreground',
+              sidebarOpen && 'bg-muted text-foreground'
             )}
-            title="Show meeting details"
+            title="Participants"
           >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
             </svg>
           </button>
         </div>
@@ -192,23 +185,6 @@ export function RoomLayout({
             />
           </div>
           
-          {/* 📍 PHẦN 4: CONTROLS Ở BOTTOM GIỮA */}
-          <div className="flex justify-center p-6 bg-gradient-to-t from-background/90 to-transparent">
-            <div className="relative z-50">
-              <MeetingControls
-                isAudioEnabled={isAudioEnabled}
-                isVideoEnabled={isVideoEnabled}
-                isScreenSharing={isScreenSharing}
-                isHost={isHost}
-                onToggleAudio={onToggleAudio}
-                onToggleVideo={onToggleVideo}
-                onToggleScreenShare={onToggleScreenShare}
-                onLeaveMeeting={onLeaveMeeting}
-                onEndMeeting={onEndMeeting}
-              />
-            </div>
-          </div>
-          
         </main>
 
         {/* 📍 PHẦN 2: SIDEBAR BÊN PHẢI */}
@@ -220,6 +196,23 @@ export function RoomLayout({
           roomId={roomId}
         />
       </div>
+
+      {/* 📍 PHẦN 4: BOTTOM CONTROLS - FULL WIDTH như header */}
+      <footer className="flex items-center justify-center px-6 py-4 bg-background border-t border-border">
+        <div className="relative z-50">
+          <MeetingControls
+            isAudioEnabled={isAudioEnabled}
+            isVideoEnabled={isVideoEnabled}
+            isScreenSharing={isScreenSharing}
+            isHost={isHost}
+            onToggleAudio={onToggleAudio}
+            onToggleVideo={onToggleVideo}
+            onToggleScreenShare={onToggleScreenShare}
+            onLeaveMeeting={onLeaveMeeting}
+            onEndMeeting={onEndMeeting}
+          />
+        </div>
+      </footer>
 
       {/* Device warnings - overlays */}
       {!hasCamera && !hasMicrophone && (
