@@ -41,6 +41,15 @@ const envSchema = z.object({
   VITE_FEATURE_SCREEN_SHARING: z.string().transform(val => val === 'true'),
   VITE_FEATURE_CHAT: z.string().transform(val => val === 'true'),
   VITE_FEATURE_RECORDING: z.string().transform(val => val === 'true'),
+
+  // Performance Configuration
+  VITE_STATS_MODE: z.enum(['realtime', 'optimized', 'lazy']).default('lazy'),
+
+  // TURN Server Configuration
+  VITE_TURN_ENABLED: z.string().transform(val => val === 'true'),
+  VITE_TURN_SERVER_URL: z.string().optional(),
+  VITE_TURN_SERVER_USERNAME: z.string().optional(),
+  VITE_TURN_SERVER_PASSWORD: z.string().optional(),
 });
 
 /**
@@ -52,27 +61,9 @@ export type EnvConfig = z.infer<typeof envSchema>;
  * Validate and parse environment variables with logging
  */
 function validateEnv(): EnvConfig {
-  console.log('🔧 Validating environment configuration...');
-  
   try {
     const result = envSchema.parse(import.meta.env);
-    console.log('✅ Environment validation successful');
-    console.log('📋 Environment summary:', {
-      environment: result.VITE_APP_ENVIRONMENT,
-      apiUrl: result.VITE_API_URL,
-      wsUrl: result.VITE_WS_URL,
-      logLevel: result.VITE_LOG_LEVEL,
-      mediaEnabled: {
-        audio: result.VITE_MEDIA_AUDIO_ENABLED,
-        video: result.VITE_MEDIA_VIDEO_ENABLED,
-        screenShare: result.VITE_MEDIA_SCREEN_SHARE_ENABLED,
-      },
-      features: {
-        screenSharing: result.VITE_FEATURE_SCREEN_SHARING,
-        chat: result.VITE_FEATURE_CHAT,
-        recording: result.VITE_FEATURE_RECORDING,
-      }
-    });
+    console.log('✅ Environment loaded:', result.VITE_APP_ENVIRONMENT);
     return result;
   } catch (error) {
     console.error('❌ Environment validation failed:');
@@ -129,6 +120,17 @@ export const featureFlags = {
   recording: env.VITE_FEATURE_RECORDING,
 } as const;
 
+export const performanceConfig = {
+  statsMode: env.VITE_STATS_MODE,
+} as const;
+
+export const turnConfig = {
+  enabled: env.VITE_TURN_ENABLED,
+  url: env.VITE_TURN_SERVER_URL,
+  username: env.VITE_TURN_SERVER_USERNAME,
+  password: env.VITE_TURN_SERVER_PASSWORD,
+} as const;
+
 /**
  * Environment helpers
  */
@@ -136,14 +138,23 @@ export const isDevelopment = appConfig.environment === 'development';
 export const isProduction = appConfig.environment === 'production';
 export const isStaging = appConfig.environment === 'staging';
 
+/**
+ * TURN server helpers
+ */
+export const isTurnEnabled = turnConfig.enabled;
+export const isTurnConfigured = Boolean(
+  turnConfig.url && turnConfig.username && turnConfig.password
+);
+export const shouldUseTurn = isTurnEnabled && isTurnConfigured;
+
 // Log final configuration in development
 if (isDevelopment) {
-  console.log('🚀 Application configuration loaded:', {
-    app: appConfig,
-    api: apiConfig,
-    ws: wsConfig,
-    media: mediaConfig,
-    logging: logConfig,
-    features: featureFlags,
-  });
+  console.log('🚀 App ready:', appConfig.name, appConfig.version);
+  console.log('🔧 TURN Configuration:');
+  console.log('   • Enabled:', isTurnEnabled ? '✅' : '❌');
+  console.log('   • Configured:', isTurnConfigured ? '✅' : '❌');
+  console.log('   • Will use TURN:', shouldUseTurn ? '✅' : '❌ (STUN-only)');
+  if (isTurnEnabled && turnConfig.url) {
+    console.log('   • Server:', turnConfig.url);
+  }
 } 

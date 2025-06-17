@@ -16,13 +16,21 @@ export interface ConnectionStats {
 interface ConnectionStatusProps {
   stats: ConnectionStats;
   className?: string;
+  onStatsVisibilityChange?: (visible: boolean) => void;
 }
 
 /**
  * Connection Status component like Google Meet
  */
-export function ConnectionStatus({ stats, className }: ConnectionStatusProps) {
+export function ConnectionStatus({ stats, className, onStatsVisibilityChange }: ConnectionStatusProps) {
   const [showDetails, setShowDetails] = useState(false);
+
+  // Handle dropdown toggle
+  const toggleDetails = () => {
+    const newShowDetails = !showDetails;
+    setShowDetails(newShowDetails);
+    onStatsVisibilityChange?.(newShowDetails);
+  };
 
   // Get status color and icon
   const getStatusInfo = () => {
@@ -57,7 +65,7 @@ export function ConnectionStatus({ stats, className }: ConnectionStatusProps) {
     <div className={cn('relative', className)}>
       {/* Status button */}
       <button
-        onClick={() => setShowDetails(!showDetails)}
+        onClick={toggleDetails}
         className={cn(
           'flex items-center gap-2 px-3 py-2 rounded-lg',
           'bg-background/90 hover:bg-accent/90 text-foreground',

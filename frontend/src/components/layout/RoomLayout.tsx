@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { VideoGrid } from '@/components/media/VideoGrid';
 import { MeetingControls } from '@/features/meeting/components/MeetingControls';
 import { ConnectionStatus, type ConnectionStats } from '@/components/ui/ConnectionStatus';
 import { MeetingSidebar, type ParticipantData } from '@/components/ui/MeetingSidebar';
-import { useMediaDevices } from '@/hooks/useMediaDevices';
+
 import type { MediaStreamInfo } from '@/services/MediasoupService';
 
 interface RoomLayoutProps {
@@ -19,18 +19,29 @@ interface RoomLayoutProps {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   isScreenSharing: boolean;
-  isHost: boolean;
   
   // Event handlers
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   onToggleScreenShare: () => void;
   onLeaveMeeting: () => void;
-  onEndMeeting?: () => void;
   
   // Connection info
   connectionStatus: 'connected' | 'connecting' | 'disconnected' | 'failed' | 'reconnecting';
   reconnectAttempts: number;
+  
+  // MediaSoup service instance for getting real stats
+  mediasoupService?: {
+    getConnectionStats: () => Promise<{
+      latency: number;
+      bandwidth: { upload: number; download: number };
+      quality: 'excellent' | 'good' | 'fair' | 'poor';
+    }>;
+  };
+  
+  // Stats gathering options
+  enableRealTimeStats?: boolean; // true = real-time (1s), false = lazy loading
+  statsMode?: 'realtime' | 'optimized' | 'lazy'; // More granular control
 }
 
 /**
@@ -46,21 +57,91 @@ export function RoomLayout({
   isAudioEnabled,
   isVideoEnabled,
   isScreenSharing,
-  isHost,
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
   onLeaveMeeting,
-  onEndMeeting,
   connectionStatus,
   reconnectAttempts,
+  mediasoupService,
+  enableRealTimeStats,
+  statsMode,
 }: RoomLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { hasCamera, hasMicrophone } = useMediaDevices();
+  const [realStats, setRealStats] = useState<{
+    latency: number;
+    bandwidth: { upload: number; download: number };
+    quality: 'excellent' | 'good' | 'fair' | 'poor';
+  } | null>(null);
+  const [isStatsVisible, setIsStatsVisible] = useState(false);
+
+
+  // Function to update stats
+  const updateStats = useCallback(async () => {
+    if (!mediasoupService) return;
+    try {
+      const stats = await mediasoupService.getConnectionStats();
+      setRealStats(stats);
+    } catch (error) {
+      console.error('Failed to get connection stats:', error);
+    }
+  }, [mediasoupService]);
+
+  // Update real stats with optimization options
+  useEffect(() => {
+    if (!mediasoupService || connectionStatus !== 'connected') {
+      setRealStats(null);
+      return;
+    }
+
+    // Determine mode priority: statsMode > enableRealTimeStats > default
+    const mode = statsMode || (enableRealTimeStats ? 'realtime' : 'optimized');
+
+    switch (mode) {
+      case 'realtime': {
+        // 🚀 REAL-TIME MODE: Update every 1 second for live monitoring
+        console.log('📊 Real-time stats mode enabled (1s interval)');
+        updateStats(); // Initial update
+        const realtimeInterval = setInterval(updateStats, 1000);
+        return () => clearInterval(realtimeInterval);
+      }
+
+      case 'optimized': {
+        // ⚡ OPTIMIZED MODE: Update every 10 seconds to save resources
+        console.log('⚡ Optimized stats mode enabled (10s interval)');
+        updateStats(); // Initial update
+        const optimizedInterval = setInterval(updateStats, 10000);
+        return () => clearInterval(optimizedInterval);
+      }
+
+      case 'lazy': {
+        // 💤 LAZY MODE: Only update when stats are visible
+    
+        if (isStatsVisible) {
+          updateStats();
+        }
+        return; // No interval
+      }
+
+      default: {
+        // Default to optimized mode
+        console.log('⚡ Default optimized stats mode (10s interval)');
+        updateStats();
+        const defaultInterval = setInterval(updateStats, 10000);
+        return () => clearInterval(defaultInterval);
+      }
+    }
+  }, [mediasoupService, connectionStatus, enableRealTimeStats, statsMode, isStatsVisible, updateStats]);
 
   // Calculate connection stats
   const connectionStats: ConnectionStats = useMemo(() => {
-    const getQuality = (): ConnectionStats['quality'] => {
+    // Use real stats if available, otherwise fallback to calculated values
+    const latency = realStats?.latency ?? (connectionStatus === 'connected' ? 45 : 999);
+    const bandwidth = realStats?.bandwidth ?? {
+      upload: connectionStatus === 'connected' ? 800 : 0,
+      download: connectionStatus === 'connected' ? 1200 : 0,
+    };
+    const quality = realStats?.quality ?? (() => {
       if (connectionStatus === 'connected') {
         if (reconnectAttempts === 0) return 'excellent';
         if (reconnectAttempts <= 2) return 'good';
@@ -68,20 +149,17 @@ export function RoomLayout({
         return 'poor';
       }
       return 'poor';
-    };
+    })();
 
     return {
       status: connectionStatus,
-      quality: getQuality(),
-      latency: Math.floor(Math.random() * 100) + 20,
-      bandwidth: {
-        upload: Math.floor(Math.random() * 1000) + 500,
-        download: Math.floor(Math.random() * 2000) + 1000,
-      },
+      quality,
+      latency,
+      bandwidth,
       participants: userIds.length + 1,
       reconnectAttempts,
     };
-  }, [connectionStatus, reconnectAttempts, userIds.length]);
+  }, [connectionStatus, reconnectAttempts, userIds.length, realStats]);
 
   // Prepare participant data for sidebar
   const participantData: ParticipantData[] = useMemo(() => {
@@ -143,7 +221,10 @@ export function RoomLayout({
 
         {/* Center - Connection Status - đưa ra đây để không bị che */}
         <div className="flex items-center gap-3">
-          <ConnectionStatus stats={connectionStats} />
+          <ConnectionStatus 
+            stats={connectionStats} 
+            onStatsVisibilityChange={setIsStatsVisible}
+          />
         </div>
 
         {/* Right - Sidebar toggle */}
@@ -204,41 +285,18 @@ export function RoomLayout({
             isAudioEnabled={isAudioEnabled}
             isVideoEnabled={isVideoEnabled}
             isScreenSharing={isScreenSharing}
-            isHost={isHost}
+            localStream={localStream}
             onToggleAudio={onToggleAudio}
             onToggleVideo={onToggleVideo}
             onToggleScreenShare={onToggleScreenShare}
             onLeaveMeeting={onLeaveMeeting}
-            onEndMeeting={onEndMeeting}
           />
         </div>
       </footer>
 
       {/* Device warnings - overlays */}
-      {!hasCamera && !hasMicrophone && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]">
-          <div className="bg-destructive text-destructive-foreground px-4 py-2 rounded-lg shadow-lg">
-            ⚠️ No camera or microphone detected
-          </div>
-        </div>
-      )}
+      {/* Removed device warnings since buttons are now properly disabled when devices are not available */}
       
-      {!hasCamera && hasMicrophone && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]">
-          <div className="bg-orange-600 text-white px-4 py-2 rounded-lg shadow-lg">
-            📷 No camera detected - audio only
-          </div>
-        </div>
-      )}
-
-      {hasCamera && !hasMicrophone && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]">
-          <div className="bg-orange-600 text-white px-4 py-2 rounded-lg shadow-lg">
-            🎤 No microphone detected - video only
-          </div>
-        </div>
-      )}
-
       {/* Connection warnings */}
       {connectionStatus === 'reconnecting' && (
         <div className="fixed top-20 right-6 z-[100]">

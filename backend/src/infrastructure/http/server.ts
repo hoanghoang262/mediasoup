@@ -11,31 +11,15 @@ import { Router } from 'express';
 import createError, { HttpError } from 'http-errors';
 import morgan from 'morgan';
 
-import { env, logger } from '../../shared/config';
+import { env, logger, getCorsConfig } from '../../shared/config';
 
 export const createServer = (apiRouter: Router): express.Application => {
   const app = express();
 
   // API-only server - no view engine needed
 
-  // Set up CORS
-  const parseOrigins = (originsStr: string): (string | RegExp)[] => {
-    return originsStr.split(',').map((origin) => origin.trim());
-  };
-
-  const corsOptions = {
-    origin: parseOrigins(env.CORS_ALLOWED_ORIGINS),
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: true,
-    maxAge: 86400, // 24 hours
-  };
-
-  // Apply CORS middleware to all routes
-  app.use(cors(corsOptions));
-
-  // Add CORS preflight support for all routes
-  app.options('/*splat', cors(corsOptions));
+  // Apply CORS middleware - handles both regular requests and preflight automatically
+  app.use(cors(getCorsConfig()));
 
   // Create a write stream for Morgan
   const morganStream = {

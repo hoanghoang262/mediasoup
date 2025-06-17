@@ -5,6 +5,8 @@ import { UsernamePrompt } from '@/components/forms/UsernamePrompt';
 import { useCallStore } from '@/store/callStore';
 import { checkServerAndNotify } from '@/utils/serverCheck';
 import { toast } from 'sonner';
+import { mediasoupService } from '@/services/MediasoupService';
+import { performanceConfig } from '@/config/env.config';
 
 
 
@@ -61,6 +63,27 @@ export const RoomPage: React.FC = () => {
     setRoomData,
   } = useCallStore();
 
+  // Debug: Log permission states - MUST be before any early returns
+  React.useEffect(() => {
+    const checkPermissions = async () => {
+      try {
+        const audioPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        const videoPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        
+        console.log('🔍 Current permissions:', {
+          audio: audioPermission.state,
+          video: videoPermission.state,
+          hasAudio: isAudioEnabled,
+          hasVideo: isVideoEnabled
+        });
+      } catch (error) {
+        console.log('Permission API not available:', error);
+      }
+    };
+
+    checkPermissions();
+  }, [isAudioEnabled, isVideoEnabled]);
+
   // Join room when we have both roomId and username
   useEffect(() => {
     if (!roomId) {
@@ -83,7 +106,7 @@ export const RoomPage: React.FC = () => {
         }
 
         // Set room data and join
-        console.log('🚀 Joining room:', roomId, 'as', localUserName);
+        console.log('🚪 Joining room:', roomId);
         setRoomData(roomId, localUserName);
         await joinRoom();
       } catch (error) {
@@ -112,16 +135,7 @@ export const RoomPage: React.FC = () => {
     }
   };
 
-  // Handle end meeting (host only)
-  const handleEndMeeting = async () => {
-    try {
-      // Could implement end meeting for all participants
-      toast.info('End meeting for all participants not implemented yet');
-      await handleLeaveMeeting();
-    } catch (error) {
-      console.error('❌ Failed to end meeting:', error);
-    }
-  };
+
 
   // Show username prompt if no username provided
   if (showUsernamePrompt) {
@@ -193,18 +207,23 @@ export const RoomPage: React.FC = () => {
       isAudioEnabled={isAudioEnabled}
       isVideoEnabled={isVideoEnabled}
       isScreenSharing={isScreenSharing}
-      isHost={true} // Could be dynamic based on room settings
+      
       
       // Event handlers
       onToggleAudio={toggleAudio}
       onToggleVideo={toggleVideo}
       onToggleScreenShare={toggleScreenShare}
       onLeaveMeeting={handleLeaveMeeting}
-      onEndMeeting={handleEndMeeting}
       
       // Connection info
       connectionStatus={connectionStatus}
       reconnectAttempts={reconnectAttempt}
+      
+      // MediaSoup service for real stats
+      mediasoupService={mediasoupService}
+      
+      // Stats gathering mode from environment configuration
+      statsMode={performanceConfig.statsMode}
     />
   );
 }; 

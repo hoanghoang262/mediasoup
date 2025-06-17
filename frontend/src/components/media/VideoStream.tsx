@@ -34,6 +34,7 @@ export interface VideoStreamProps {
 
 /**
  * VideoStream component for displaying MediaStream in a video element
+ * Optimized for video meeting sessions
  */
 export function VideoStream({ 
   stream, 
@@ -47,7 +48,7 @@ export function VideoStream({
   // Show placeholder if no stream
   if (!stream) {
     return (
-      <div className={cn("bg-gray-900 flex items-center justify-center", className)}>
+      <div className={cn("bg-gray-900 flex items-center justify-center rounded-lg", className)}>
         {placeholder || (
           <div className="text-center text-white">
             <div className="text-4xl mb-2">📹</div>
@@ -65,10 +66,16 @@ export function VideoStream({
       playsInline
       muted={muted}
       className={cn(
-        "w-full h-full object-cover bg-gray-900",
-        mirror && "mirror",
+        "w-full h-full bg-gray-900 rounded-lg",
+        // Use object-cover by default, but allow override via className
+        !className?.includes('object-') && "object-cover",
+        mirror && "scale-x-[-1]",
         className
       )}
+      style={{
+        // Ensure video maintains aspect ratio and fills container properly
+        objectPosition: 'center'
+      }}
     />
   );
 } 

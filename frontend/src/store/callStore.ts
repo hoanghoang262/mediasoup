@@ -43,7 +43,9 @@ interface CallState {
 
 // Helper to generate a user-friendly name from a peer ID
 const generateUserNameFromPeerId = (peerId: string): string => {
-  return peerId;
+  // Generate a more user-friendly name from peer ID
+  const shortId = peerId.substring(0, 8);
+  return `User ${shortId}`;
 };
 
 export const useCallStore = create<CallState>((set, get) => ({
@@ -67,14 +69,14 @@ export const useCallStore = create<CallState>((set, get) => ({
   joinRoom: async () => {
     const { roomId, userName } = get();
     
-    console.log('🚀 CallStore joinRoom called with:', { roomId, userName });
+    console.log('🔄 Joining room...');
     
     if (!roomId || !userName) {
       console.error('Room ID and username must be provided');
       return;
     }
     
-    console.log('🔄 Starting join room process...');
+    
     set({ isJoining: true });
     
     // First, check server health
