@@ -1,10 +1,11 @@
+import { apiConfig } from '../config/env.config';
+
 // API Service để tương tác với backend REST endpoints
 class ApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-    console.log('🔧 ApiService baseURL:', this.baseURL);
+    this.baseURL = apiConfig.url;
   }
 
   /**
@@ -12,13 +13,15 @@ class ApiService {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const url = `${this.baseURL}/health`;
-      console.log('🏥 ApiService checking health at:', url);
-      const response = await fetch(url);
-      console.log('🏥 Health check response:', response.status, response.ok);
+      const response = await fetch(`${this.baseURL}/health`);
+      if (response.ok) {
+        console.log('🟢 Server connected');
+      } else {
+        console.log('🔴 Server error:', response.status);
+      }
       return response.ok;
-    } catch (error) {
-      console.error('❌ Health check error:', error);
+    } catch {
+      console.error('🔴 Server unreachable');
       return false;
     }
   }
@@ -67,11 +70,10 @@ class ApiService {
    */
   async getRoom(roomId: string): Promise<Room | null> {
     try {
-      console.log('🔍 Checking room existence:', roomId);
       const response = await fetch(`${this.baseURL}/rooms/${roomId}`);
       
       if (response.status === 404) {
-        console.log('❌ Room not found:', roomId);
+        console.log('🔴 Room not found:', roomId);
         return null;
       }
       
@@ -80,10 +82,10 @@ class ApiService {
       }
 
       const room = await response.json();
-      console.log('✅ Room found:', room);
+      console.log('🟢 Room found:', roomId);
       return room;
-    } catch (error) {
-      console.error('❌ Error checking room:', error);
+    } catch {
+      console.error('🔴 Error checking room');
       return null;
     }
   }

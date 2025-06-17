@@ -30,8 +30,8 @@ interface VideoGridProps {
 }
 
 /**
- * VideoGrid displays multiple video streams in a responsive grid layout
- * Compatible with new shared VideoStream component
+ * VideoGrid displays all participants (including screen shares) in a unified grid layout
+ * Optimized for video meeting sessions with consistent aspect ratios
  */
 export function VideoGrid({ 
   localStream, 
@@ -42,159 +42,172 @@ export function VideoGrid({
 }: VideoGridProps) {
   const { screenSharingStream, isScreenSharing } = useCallStore();
 
-  // Debug logging
-  console.log('🎥 VideoGrid render:', {
-    userIds,
-    remoteStreamsCount: remoteStreams.length,
-    remoteStreams: remoteStreams.map(s => ({ 
-      id: s.id, 
-      peerId: s.peerId, 
-      isScreenShare: s.isScreenShare, 
-      kind: s.track?.kind,
-      trackId: s.track?.id
-    })),
-    remoteUserNames
+  // Find remote screen shares và regular streams
+  const remoteScreenShares = remoteStreams.filter(stream => stream.isScreenShare);
+  const remoteRegularStreams = remoteStreams.filter(stream => !stream.isScreenShare);
+  
+  // Only log when there are changes in participant count or screen sharing
+  const participantCount = userIds.length + 1; // +1 for local user
+  const screenShareCount = remoteScreenShares.length + (isScreenSharing ? 1 : 0);
+  
+  const globalWindow = window as unknown as { 
+    __lastParticipantCount?: number; 
+    __lastScreenShareCount?: number; 
+  };
+  
+  if (participantCount !== globalWindow.__lastParticipantCount || 
+      screenShareCount !== globalWindow.__lastScreenShareCount) {
+    console.log('👥 Participants:', participantCount, screenShareCount > 0 ? `🖥️ Screen shares: ${screenShareCount}` : '');
+    globalWindow.__lastParticipantCount = participantCount;
+    globalWindow.__lastScreenShareCount = screenShareCount;
+  }
+
+  // Tạo danh sách tất cả participants (bao gồm cả screen shares) trong cùng một grid
+  const allParticipants: Array<{
+    id: string;
+    type: 'local' | 'remote' | 'local-screen' | 'remote-screen';
+    stream: MediaStream | null;
+    name: string;
+    peerId?: string;
+    isScreenShare: boolean;
+  }> = [];
+
+  // Add local user
+  allParticipants.push({
+    id: 'local',
+    type: 'local',
+    stream: localStream,
+    name: localUserName,
+    isScreenShare: false
   });
 
-  // Find remote screen shares với debug chi tiết
-  console.log('🔍 Filtering for screen shares...');
-  const remoteScreenShares = remoteStreams.filter((stream, index) => {
-    console.log(`🔍 Stream ${index}:`, {
-      id: stream.id,
-      peerId: stream.peerId,
-      isScreenShare: stream.isScreenShare,
-      trackKind: stream.track?.kind,
-      willInclude: stream.isScreenShare
+  // Add local screen share if active
+  if (isScreenSharing && screenSharingStream) {
+    allParticipants.push({
+      id: 'local-screen',
+      type: 'local-screen',
+      stream: screenSharingStream,
+      name: `${localUserName} (Screen)`,
+      isScreenShare: true
     });
-    return stream.isScreenShare;
-  });
-  
-  console.log('🖥️ Screen shares found:', {
-    localScreenSharing: isScreenSharing,
-    totalRemoteStreams: remoteStreams.length,
-    remoteScreenSharesCount: remoteScreenShares.length,
-    remoteScreenShares: remoteScreenShares.map(s => ({ 
-      id: s.id, 
-      peerId: s.peerId, 
-      trackKind: s.track?.kind,
-      isScreenShare: s.isScreenShare
-    }))
+  }
+
+  // Helper function to get consistent user name
+  const getUserName = (userId: string): string => {
+    const rawUserName = remoteUserNames[userId] || `User ${userId.substring(0, 8)}`;
+    return rawUserName;
+  };
+
+  // Add remote users (regular video)
+  userIds.forEach((userId) => {
+    const audioStream = remoteRegularStreams.find(stream => 
+      stream.peerId === userId && stream.track?.kind === 'audio'
+    );
+    const videoStream = remoteRegularStreams.find(stream => 
+      stream.peerId === userId && stream.track?.kind === 'video'
+    );
+    
+    // Combine audio and video tracks into single stream
+    const combinedTracks = [];
+    if (audioStream?.track) combinedTracks.push(audioStream.track);
+    if (videoStream?.track) combinedTracks.push(videoStream.track);
+    const combinedStream = combinedTracks.length > 0 ? new MediaStream(combinedTracks) : null;
+    
+    const userName = getUserName(userId);
+    
+    allParticipants.push({
+      id: userId,
+      type: 'remote',
+      stream: combinedStream,
+      name: userName,
+      peerId: userId,
+      isScreenShare: false
+    });
   });
 
-  // Calculate total participants
-  const totalParticipants = userIds.length + 1; // +1 for local user
-  
-  // Determine grid layout based on participant count
-  let gridClassName = 'grid gap-4';
+  // Add remote screen shares
+  remoteScreenShares.forEach((screenShareStream) => {
+    const userName = getUserName(screenShareStream.peerId);
+    
+    allParticipants.push({
+      id: `${screenShareStream.peerId}-screen`,
+      type: 'remote-screen',
+      stream: screenShareStream.stream,
+      name: `${userName} (Screen)`,
+      peerId: screenShareStream.peerId,
+      isScreenShare: true
+    });
+  });
+
+  // Calculate grid layout for all participants
+  const totalParticipants = allParticipants.length;
+  let gridClassName = 'grid gap-3 h-full';
   
   if (totalParticipants <= 1) {
     gridClassName += ' grid-cols-1';
   } else if (totalParticipants === 2) {
-    gridClassName += ' grid-cols-2';
+    gridClassName += ' grid-cols-1 lg:grid-cols-2';
   } else if (totalParticipants <= 4) {
     gridClassName += ' grid-cols-2';
   } else if (totalParticipants <= 6) {
+    gridClassName += ' grid-cols-2 lg:grid-cols-3';
+  } else if (totalParticipants <= 9) {
     gridClassName += ' grid-cols-3';
   } else {
-    gridClassName += ' grid-cols-4';
+    gridClassName += ' grid-cols-3 lg:grid-cols-4';
   }
-    
+
   return (
     <div className={gridClassName}>
-      {/* Local Screen share (if active) */}
-      {isScreenSharing && screenSharingStream && (
-        <div className="col-span-full aspect-video mb-4">
-          <VideoStream
-            stream={screenSharingStream}
-            muted={true}
-            className="w-full h-full rounded-lg"
-          />
-          <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-            {localUserName} (Screen Share)
-          </div>
-        </div>
-      )}
-      
-      {/* Remote Screen shares */}
-      {remoteScreenShares.map((screenShareStream) => {
-        const sharerName = remoteUserNames[screenShareStream.peerId] || screenShareStream.peerId.substring(0, 8);
-        const cleanSharerName = sharerName.startsWith('User ') ? sharerName.substring(5) : sharerName;
+      {allParticipants.map((participant) => {
+        const isLocalUser = participant.type === 'local';
+        const isScreenShare = participant.isScreenShare;
+        
+        let borderClass = 'border-2 border-gray-600/30';
+        let labelClass = 'bg-gray-800/90 backdrop-blur text-gray-200';
+        let icon = '👥';
+        let containerClass = 'relative bg-gray-900 rounded-lg overflow-hidden min-h-[200px]';
+        let videoClass = 'w-full h-full object-cover';
+        
+        if (isLocalUser) {
+          borderClass = 'border-2 border-blue-500/50';
+          labelClass = 'bg-blue-600/90 backdrop-blur text-white';
+          icon = '📹';
+        } else if (isScreenShare) {
+          borderClass = 'border-2 border-green-500/50';
+          labelClass = 'bg-green-600/90 backdrop-blur text-white';
+          icon = '🖥️';
+          // Screen shares use object-contain to show full content without cropping
+          videoClass = 'w-full h-full object-contain bg-black';
+          containerClass = 'relative bg-black rounded-lg overflow-hidden min-h-[200px]';
+        }
         
         return (
-          <div key={`screen-${screenShareStream.id}`} className="col-span-full aspect-video mb-4">
+          <div key={participant.id} className={containerClass}>
             <VideoStream
-              stream={screenShareStream.stream}
-              muted={false}
-              className="w-full h-full rounded-lg"
-            />
-            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-              {cleanSharerName} (Screen Share)
-            </div>
-          </div>
-        );
-      })}
-      
-      {/* Local video */}
-      <div className="relative aspect-video">
-        <VideoStream
-          stream={localStream}
-          muted={true}
-          className="w-full h-full rounded-lg"
-        />
-        <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-          {localUserName} (You)
-        </div>
-      </div>
-      
-      {/* Remote videos */}
-      {userIds.map((userId) => {
-        // Find audio and video streams for this user (non-screen share)
-        const audioStream = remoteStreams.find(stream => 
-          stream.peerId === userId && 
-          !stream.isScreenShare && 
-          stream.track?.kind === 'audio'
-        );
-        
-        const videoStream = remoteStreams.find(stream => 
-          stream.peerId === userId && 
-          !stream.isScreenShare && 
-          stream.track?.kind === 'video'
-        );
-        
-        // Combine audio and video tracks into single stream
-        const combinedTracks = [];
-        if (audioStream?.track) combinedTracks.push(audioStream.track);
-        if (videoStream?.track) combinedTracks.push(videoStream.track);
-        const combinedStream = combinedTracks.length > 0 ? new MediaStream(combinedTracks) : null;
-        
-        // Clean up username - remove "User " prefix if exists
-        const rawUserName = remoteUserNames[userId] || userId.substring(0, 8);
-        const userName = rawUserName.startsWith('User ') ? rawUserName.substring(5) : rawUserName;
-        
-        console.log(`🔍 Combining streams for userId: ${userId}:`, {
-          audioStream: audioStream ? { id: audioStream.id, kind: audioStream.track?.kind } : null,
-          videoStream: videoStream ? { id: videoStream.id, kind: videoStream.track?.kind } : null,
-          combinedTracks: combinedTracks.length,
-          hasAudio: !!audioStream,
-          hasVideo: !!videoStream
-        });
-        
-        return (
-          <div key={userId} className="relative aspect-video">
-            <VideoStream
-              stream={combinedStream}
-              className="w-full h-full rounded-lg"
+              stream={participant.stream}
+              muted={isLocalUser || participant.type === 'local-screen'}
+              mirror={isLocalUser && !isScreenShare}
+              className={`${videoClass} ${borderClass}`}
               placeholder={
-                <div className="flex items-center justify-center h-full bg-gray-800 text-white rounded-lg">
+                <div className={`flex items-center justify-center h-full bg-gradient-to-br ${isScreenShare ? 'from-slate-800 to-slate-900' : 'from-gray-800 to-gray-900'} text-gray-300 ${borderClass}`}>
                   <div className="text-center">
-                    <div className="text-2xl mb-2">👤</div>
-                    <div className="text-sm">{userName}</div>
+                    <div className="text-4xl mb-3">{isScreenShare ? '🖥️' : '👤'}</div>
+                    <div className="text-base font-medium">{participant.name}</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {isScreenShare 
+                        ? 'Screen sharing...' 
+                        : isLocalUser 
+                          ? 'Camera off' 
+                          : 'Waiting for video...'
+                      }
+                    </div>
                   </div>
                 </div>
               }
             />
-            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-              {userName}
+            <div className={`absolute bottom-3 left-3 ${labelClass} px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg`}>
+              {icon} {participant.name}{isLocalUser && !isScreenShare ? ' (You)' : ''}
             </div>
           </div>
         );
